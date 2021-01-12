@@ -59,10 +59,10 @@ class Network:
         self.regularization = regularization  # TODO: Need to incorporate this in loss function
 
     def forward_pass(self):
-        # TODO
+        return
 
     def backward_pass(self):
-        # TODO
+        return
 
     def _mse(self):
         return
