@@ -2,15 +2,21 @@ import numpy as np
 
 
 # Class for Layer objects
-# TODO: initial weight ranges
+
+
 class Layer:
 
-    def __init__(self, input_size, neurons, activation, weight_range=(-0.1, 0.1)):
+    def __init__(self, input_size, neurons, activation):
 
         self.activation = None
         self.act = None
         self.sum_in = None
         self.prev_layer = None
+        self.weights = []
+        self.biases = []
+
+        self.neurons = neurons
+        self.input_size = input_size
 
         if activation == 'sigmoid':
             self.activation = self._sigmoid
@@ -26,39 +32,6 @@ class Layer:
 
         if activation == 'softmax':
             self.activation = self._softmax
-
-        self.neurons = neurons
-        np.random.seed(0)
-        self.weights = np.random.uniform(weight_range[0], weight_range[1],
-                                         (input_size, neurons)) if activation != "softmax" else []
-        self.biases = np.random.uniform(weight_range[0], weight_range[1], (neurons,)) if activation != "softmax" else []
-
-    def forward_pass(self, x):
-
-        # Need to have a look at this, now I have x.t dot W
-        if self.activation != self._softmax:
-            x = np.dot(x, self.weights) + self.biases
-        self.sum_in = x
-        self.act = self.activation(x)
-
-        return self.act
-
-    def backward_pass(self, J_L_Z):
-        # TODO: double check if all matrix calculations are correct
-        # TODO: bias gradient
-
-
-        J_sum_diag = self.activation(self.sum_in, derivative=True)  # OK
-        J_sum = np.array([np.diag(row) for row in J_sum_diag])  # OK
-
-        J_Z_Y = np.dot(J_sum, np.transpose(self.weights))  # OK (ISH)
-        J_Z_W = np.outer(self.prev_layer.act, J_sum_diag)  # CHECK THIS
-
-        J_L_W = np.dot(J_L_Z, J_Z_W)  # Use this to update W / CHECK THIS
-        J_L_Y = np.dot(J_L_Z, J_Z_Y)  # Send this upstream / CHECK THIS
-
-        # I may have to return more than this to use downstream during backprop
-        return J_L_Y
 
     def _sigmoid(self, x, derivative=False):
 
@@ -77,7 +50,6 @@ class Layer:
     def _relu(self, x, derivative=False):
 
         if derivative:
-
             return x > 0
 
         return np.maximum(0, x)
@@ -99,6 +71,72 @@ class Layer:
         return np.exp(x) / np.sum(np.exp(x))
 
 
+class Input(Layer):
+    def __init__(self, input_size):
+        super().__init__(input_size=input_size, neurons=input_size, activation=None)
+        self.input_size = input_size
+
+    def forward_pass(self, x):
+        self.sum_in = x
+        self.act = x
+
+        return self.act
+
+    def backward_pass(self, J_L_Z):
+        raise TypeError("The input layer does not have a backward pass method.")
+
+
+class FullyConnected(Layer):
+
+    def __init__(self, neurons, activation, weight_range=(-0.1, 0.1)):
+        super().__init__(input_size=0, neurons=neurons, activation=activation)
+        self.weight_range = weight_range
+
+    def forward_pass(self, x):
+        self.sum_in = np.dot(x, self.weights) + self.biases
+        self.act = self.activation(self.sum_in)
+
+        return self.act
+
+    def initialize_weights(self, input_size):
+        np.random.seed(3)
+        self.weights = np.random.uniform(self.weight_range[0], self.weight_range[1], (input_size, self.neurons))
+
+    def initialize_biases(self):
+        np.random.seed(5)
+        self.biases = np.random.uniform(self.weight_range[0], self.weight_range[1], (self.neurons,))
+
+    def backward_pass(self, J_L_Z):
+        # TODO: double check if all matrix calculations are correct
+        # TODO: bias gradient
+
+        J_sum_diag = self.activation(self.sum_in, derivative=True)  # OK, diag(delta)
+        J_sum = np.array([np.diag(row) for row in J_sum_diag])  # OK, delta
+
+        J_Z_Y = np.dot(J_sum, np.transpose(self.weights))  # OK (ISH)
+        J_Z_W = np.outer(self.prev_layer.act, J_sum_diag)  # CHECK THIS
+
+        J_L_W = np.dot(J_L_Z, J_Z_W)  # Use this to update W / CHECK THIS
+        J_L_Y = np.dot(J_L_Z, J_Z_Y)  # Send this upstream / CHECK THIS
+
+        # I may have to return more than this to use downstream during backprop
+        return J_L_Y
+
+
+class Softmax(Layer):
+    def __init__(self, neurons=0):
+        super().__init__(input_size=neurons, neurons=neurons, activation='softmax')
+
+    def forward_pass(self, x):
+        self.sum_in = x
+        self.act = self.activation(self.sum_in)
+
+        return self.act
+
+    def backward_pass(self, J_L_Z):
+        raise NotImplementedError("The backward pass is not implemented for softmax.")
+
+
 # Class for Network objects
 class Network:
 
@@ -109,10 +147,27 @@ class Network:
 
     def add(self, layer):
         if len(self.layers) > 0:
-            layer.prev_layer = self.layers[-1]
+            if isinstance(layer, Input):
+                raise ValueError("An input layer can only be the first layer")
+
+            prev_layer = self.layers[-1]
+            layer.prev_layer = prev_layer
+            if not isinstance(layer, Softmax):
+                layer.initialize_weights(input_size=prev_layer.neurons)
+                layer.initialize_biases()
+            else:
+                layer.neurons = prev_layer.neurons
+        else:
+            if not isinstance(layer, Input):
+                raise ValueError("The first layer in the network must be a input layer")
+
         self.layers.append(layer)
 
     def compile(self, loss, regularization):
+        num_layers = len(self.layers)
+        for i in range(num_layers-1):
+            if isinstance(self.layers[i], Softmax):
+                raise NotImplementedError("Network does not support Softmax layer other than at the output")
 
         if loss == "mse":
             self.loss = self._mse
@@ -125,10 +180,6 @@ class Network:
             self.regularization = self._l2
 
     def forward_pass(self, x):
-        print("---------------")
-        print("Layer 0")
-        print(x)
-        print("---------------")
         i = 1
         for layer in self.layers:
             x = layer.forward_pass(x)
@@ -183,24 +234,22 @@ class Network:
 
 if __name__ == "__main__":
     model = Network()
-    model.add(Layer(input_size=3,
-                    neurons=2,
-                    activation='sigmoid'
-                    ))
-    model.add(Layer(input_size=2,
-                    neurons=2,
-                    activation='softmax'
-                    ))
+
+    model.add(Input(input_size=3))
+    model.add(FullyConnected(neurons=2,
+                             activation='relu'
+                             ))
+    model.add(Softmax())
 
     a = np.array([1, 2, 3])
     b = np.array([3, 3, 3])
-    c = np.array([[1, 2, 3], [3, 3, 3],[1, 1, 1],[1,2,3]])
+    c = np.array([[1, 2, 3], [3, 3, 3], [1, 1, 1], [1, 2, 3]])
 
-    #model.forward_pass(a)
-    #model.forward_pass(b)
-    model.forward_pass(b)
+    # model.forward_pass(a)
+    # model.forward_pass(b)
+    model.forward_pass(a)
 
     layer1 = model.layers[0]
 
-    print(model.layers[0].sum_in)
-    print(layer1.activation(layer1.sum_in, derivative=True))
+    #print(model.layers[0].sum_in)
+    #print(layer1.activation(layer1.sum_in, derivative=True))
