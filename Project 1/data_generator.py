@@ -1,3 +1,6 @@
+import numpy as np
+
+
 class DataGenerator:
     def __init__(self, n, size_range, noise, train_size, test_size, val_size):
         self.n = n
@@ -35,8 +38,10 @@ class Image:
         self.label = label
         self.flat = flat
 
+    def flatten(self, vector=True):
+        if vector:
+            return np.reshape(self.flat, (-1,))
 
-    def flatten(self):
         return self.flat
 
     def get_label(self):
