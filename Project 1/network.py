@@ -2,9 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-# TODO: Bias regularization
-
-
 # Class for Layer objects
 class Layer:
 
@@ -100,7 +97,7 @@ class Input(Layer):
 
 class FullyConnected(Layer):
 
-    def __init__(self, neurons, activation, weight_range=(-0.1, 0.1)):
+    def __init__(self, neurons, activation, weight_range=(-0.5, 0.5)):
         super().__init__(input_size=0, neurons=neurons, activation=activation)
         if not self.activation:
             raise ValueError("'{activation}' is not a valid activation function for a fully connected layer.".format(
@@ -191,6 +188,8 @@ class Network:
                 self.update_parameters()
 
             training_loss = training_loss / train_data.shape[0]
+
+
             training_losses.append(training_loss)
 
             if val_data and val_targets:
@@ -335,6 +334,7 @@ class Network:
 
 
 if __name__ == "__main__":
+    '''
     model = Network()
 
     model.add(Input(input_size=2))
@@ -364,7 +364,7 @@ if __name__ == "__main__":
     # model.backward_pass(c, target)
 
     # fit(self, train_data, targets, batch_size, epochs=50, val_data=None, val_targets=None)
-    train_loss, val_loss = model.fit(train_data=c, targets=target, batch_size=1, epochs=1000)
+    train_loss, val_loss = model.fit(train_data=c, targets=target, batch_size=2, epochs=1000)
 
     print(train_loss[-1])
     print(val_loss)
@@ -372,3 +372,43 @@ if __name__ == "__main__":
     plt.show()
 
     print(model.predict(c))
+    '''
+
+    # XOR Test
+    model = Network()
+
+    model.add(Input(input_size=2))
+    model.add(FullyConnected(neurons=3,
+                             activation='tanh',
+                             weight_range=(-0.5, 0.5)
+                             ))
+    model.add(FullyConnected(neurons=1,
+                             activation='tanh',
+                             weight_range=(-0.5, 0.5)
+                             ))
+
+    x_train = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
+    y_train = np.array([[0], [1], [1], [0]])
+
+    print(model.layers[1].weights)
+    print(model.layers[2].weights)
+    print(model.predict(x_train))
+    print("_____")
+
+    model.compile(loss="mse", regularization='l1', reg_rate=0.001, learning_rate=0.1)
+    train_loss, val_loss = model.fit(train_data=x_train,
+                                     targets=y_train,
+                                     batch_size=2,
+                                     epochs=10000)
+    print("_____")
+    print(model.layers[1].weights)
+    print(model.layers[2].weights)
+    print("_____")
+
+    plt.plot(train_loss)
+    plt.show()
+    print(model.predict(x_train))
+    print(model.predict(x_train[0]))
+    print(train_loss)
+
+
