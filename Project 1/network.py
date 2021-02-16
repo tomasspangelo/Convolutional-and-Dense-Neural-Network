@@ -1,11 +1,19 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
 
-# Class for Layer objects
 class Layer:
+    """
+    Superclass that all Layer classes inherits from.
+    """
 
     def __init__(self, input_size, neurons, activation):
+        """
+        Initializes all variables and finds correct activation function
+        according to the string input.
+        :param input_size: Size of input to the layer.
+        :param neurons: Number of neurons in the layer.
+        :param activation: String indicating activation function.
+        """
 
         self.activation = None
         self.act = None
@@ -22,19 +30,25 @@ class Layer:
         if activation == 'sigmoid':
             self.activation = self._sigmoid
 
-        if activation == 'tanh':
+        elif activation == 'tanh':
             self.activation = self._tanh
 
-        if activation == 'relu':
+        elif activation == 'relu':
             self.activation = self._relu
 
-        if activation == 'linear':
+        elif activation == 'linear':
             self.activation = self._linear
 
-        if activation == 'softmax':
+        elif activation == 'softmax':
             self.activation = self._softmax
 
     def _sigmoid(self, x, derivative=False):
+        """
+        Sigmoid activation function.
+        :param x: Input.
+        :param derivative: True if method should return the derivative, otherwise False.
+        :return: Activation or derivative depending on derivative param.
+        """
 
         if derivative:
             return self._sigmoid(x) * (1 - self._sigmoid(x))
@@ -42,13 +56,24 @@ class Layer:
         return 1 / (1 + np.exp(-x))
 
     def _tanh(self, x, derivative=False):
-
+        """
+        Tanh activation function.
+        :param x: Input.
+        :param derivative: True if method should return the derivative, otherwise False.
+        :return: Activation or derivative depending on derivative param.
+        """
         if derivative:
             return 1 - np.tanh(x) ** 2
 
         return np.tanh(x)
 
     def _relu(self, x, derivative=False):
+        """
+        ReLu activation function.
+        :param x: Input.
+        :param derivative: True if method should return the derivative, otherwise False.
+        :return: Activation or derivative depending on derivative param.
+        """
 
         if derivative:
             der = np.copy(x)
@@ -59,6 +84,12 @@ class Layer:
         return np.maximum(0, x)
 
     def _linear(self, x, derivative=False):
+        """
+        Linear activation function.
+        :param x: Input.
+        :param derivative: True if method should return the derivative, otherwise False.
+        :return: Activation or derivative depending on derivative param.
+        """
 
         if derivative:
             return np.ones(x.shape)
@@ -66,6 +97,12 @@ class Layer:
         return x
 
     def _softmax(self, x, derivative=False):
+        """
+        Linear activation function.
+        :param x: Input.
+        :param derivative: True if method should return the derivative, otherwise False.
+        :return: Activation or derivative depending on derivative param.
+        """
         if derivative:
             if len(x.shape) > 1:
                 square = np.array([np.tile(row, (len(row), 1)) for row in x])
@@ -81,11 +118,24 @@ class Layer:
 
 
 class Input(Layer):
+    """
+    Class for Input layer, inherits from superclass Layer.
+    """
+
     def __init__(self, input_size):
+        """
+        Initializes variables and calls constructor of superclass.
+        :param input_size: Number of features for each data sample.
+        """
         super().__init__(input_size=input_size, neurons=input_size, activation=None)
         self.input_size = input_size
 
     def forward_pass(self, x):
+        """
+        Forward pass for input layer, caches sum in and activation.
+        :param x: Data, with one row per sample in minibatch. Shape is (#samples,#features)
+        :return: Activation, which is the input.
+        """
         self.sum_in = x
         self.act = x
 
@@ -96,8 +146,17 @@ class Input(Layer):
 
 
 class FullyConnected(Layer):
+    """
+    Class for Fully Connected layers, inherits from superclass Layer.
+    """
 
     def __init__(self, neurons, activation, weight_range=(-0.5, 0.5)):
+        """
+        Initializes variables and calls superclass constructor.
+        :param neurons: Number of neurons in the layer.
+        :param activation: String indicating activation function.
+        :param weight_range: Tuple indicating max and min weight value (for initialization).
+        """
         super().__init__(input_size=0, neurons=neurons, activation=activation)
         if not self.activation:
             raise ValueError("'{activation}' is not a valid activation function for a fully connected layer.".format(
@@ -105,102 +164,202 @@ class FullyConnected(Layer):
         self.weight_range = weight_range
 
     def forward_pass(self, x):
+        """
+        Forward pass for fully connected layer, caches sum in and activation.
+        :param x: Input (one row in matrix per sample in minibatch)
+        :return: Activation for layer.
+        """
         self.sum_in = np.dot(x, self.weights) + self.biases
         self.act = self.activation(self.sum_in)
 
         return self.act
 
     def initialize_weights(self, input_size):
-        # np.random.seed(3)
+        """
+        Initializes weights randomly by uniform distribution according to weight range.
+        :param input_size: Size of the input (typically # neurons in previous layer).
+        :return: None
+        """
         self.weights = np.random.uniform(self.weight_range[0], self.weight_range[1], (input_size, self.neurons))
 
     def initialize_biases(self):
-        # np.random.seed(5)
+        """
+        Initializes biases randomly by uniform distribution according to weight range.
+        :return: None
+        """
         self.biases = np.random.uniform(self.weight_range[0], self.weight_range[1], (self.neurons,))
 
     def backward_pass(self, J_L_Z):
-        # TODO: double check if all matrix calculations are correct
+        """
+        Backward pass for a fully connected layer, cache gradients for update.
+        :param J_L_Z: Derivative of the loss w.r.t. the output of this layer.
+        :return: J_L_Y: Derivative of the loss w.r.t. the output of the previous layer.
+        """
 
-        J_sum_diag = self.activation(self.sum_in, derivative=True)  # OK, diag(delta)
+        # Derivative of output w.r.t. the sum in (diagonal of Jacobian)
+        J_sum_diag = self.activation(self.sum_in, derivative=True)
+
+        # Derivative of output w.r.t the output of the previous layer.
+        # Corresponds to J_sum_diag dot W.T
         J_Z_Y = np.einsum("ij,jk->ijk", J_sum_diag, np.transpose(self.weights))
-        J_Z_W = np.einsum('ij,ik->ijk', self.prev_layer.act, J_sum_diag)  # Should be correct now
 
-        # J_L_W = J_L_Z * J_Z_W  # Use this to update W / MUST BE FIXED
-        # J_L_Y = np.dot(J_L_Z, J_Z_Y)  # Send this upstream / CHECK THIS
+        # Derivative of output w.r.t the output of this layer.
+        # Corresponds to Y outer product J_sum_diag
+        J_Z_W = np.einsum('ij,ik->ijk', self.prev_layer.act, J_sum_diag)
 
-        J_L_W = np.einsum("ij,ikj->ikj", J_L_Z, J_Z_W)  # Should be correct now
-        J_L_Y = np.einsum("ij,ijk->ik", J_L_Z, J_Z_Y)  # Should be correct now
+        # Derivative of loss w.r.t the weights of this layer.
+        # Every jth element of J_L_Z is multiplied by every item
+        # in the jth column of J_Z_W
+        J_L_W = np.einsum("ij,ikj->ikj", J_L_Z, J_Z_W)
 
+        # Derivative of loss w.r.t the output of the previous layer.
+        # Corresponds to J_L_Z dot J_Z_Y
+        J_L_Y = np.einsum("ij,ijk->ik", J_L_Z, J_Z_Y)
+
+        # Derivative of loss w.r.t the biases of this layer.
+        # element-wise multiplication of J_L_Z and J_sum_diag
         bias_gradient = J_L_Z * J_sum_diag
 
         self.weight_gradient = J_L_W
         self.bias_gradient = bias_gradient
 
-        # I may have to return more than this to use downstream during backprop
         return J_L_Y
 
 
 class Softmax(Layer):
+    """
+    Class for Softmax layers. Inherits from superclass Layer.
+    """
+
     def __init__(self, neurons=0):
+        """
+        Calls constructor of superclass.
+        :param neurons: Number of neurons (should be same as # neurons in previous layer)
+        """
         super().__init__(input_size=neurons, neurons=neurons, activation='softmax')
 
     def forward_pass(self, x):
+        """
+        Forward pass for softmax layer.
+        :param x: Input (one row in matrix per sample in minibatch)
+        :return: Activation for layer.
+        """
         self.sum_in = x
         self.act = self.activation(self.sum_in)
 
         return self.act
 
     def backward_pass(self, J_L_Z):
+        """
+        Backward pass for softmax layer.
+        :param J_L_Z: Derivative of loss w.r.t. output of this layer.
+        :return: Derivative of loss w.r.t the output of the previous layer.
+        """
+
+        # Derivative of softmax output w.r.t output of the previous layer.
         J_soft = self.activation(self.act, derivative=True)
 
-        return np.einsum("ij, ijk ->ik", J_L_Z, J_soft)
+        # Derivative of loss w.r.t to output of prev. layer.
+        # Corresponds to J_L_Z dot J_soft
+        J_L_Y = np.einsum("ij, ijk ->ik", J_L_Z, J_soft)
+        return J_L_Y
 
 
-# Class for Network objects
 class Network:
+    """
+    Class for (sequential) Network objects.
+    """
 
     def __init__(self):
+        """
+        Initializes variables to default values.
+        """
         self.loss = None
         self.regularization = None
         self.layers = []
         self.reg_rate = 0
 
-    def fit(self, train_data, targets, batch_size, epochs=50, val_data=None, val_targets=None):
+    def fit(self, train_data, targets, batch_size, epochs=50, val_data=None, val_targets=None, metrics=[], verbosity=1):
+        """
+        The method that takes care of training the network (forward pass, backward pass and updates)
+        :param train_data: Training data. Shape is (#samples, #features)
+        :param targets: Targets for training data. Shape is (#samples, -1)
+        :param batch_size: Number of samples in each mini batch.
+        :param epochs: Number of epochs.
+        :param val_data: Validation data. Shape is (#samples, #features)
+        :param val_targets: Targets for validation data. Shape is (#samples, -1)
+        :param metrics: List of additional metrics. Currently only supports accuracy.
+        :param verbosity: 1 if user wants command line prints during training, 0 otherwise. 2 for more detailed info.
+        :return: Training and validation losses for each epoch.
+        """
         training_losses = []
         validation_losses = []
 
         for epoch in range(epochs):
+            if verbosity >= 1:
+                print("Epoch {epoch}/{epochs}".format(epoch=epoch + 1, epochs=epochs))
             training_loss = 0
             for i in range(0, train_data.shape[0], batch_size):
                 mini_batch = train_data[i:i + batch_size]
-                mini_batch_targets = targets[i:i + batch_size]  # TODO: Need to account for one-hot
+                mini_batch_targets = targets[i:i + batch_size]
 
                 activation = self.forward_pass(mini_batch)
-
-                # Should this be done AFTER parameters are updated or before?
-                training_loss += self.loss(activation, mini_batch_targets)
-                if self.regularization:
-                    training_loss += sum(
-                        [self.regularization(layer.weights) + self.regularization(layer.biases) for layer in
-                         self.layers])
+                batch_loss = self.loss(activation, mini_batch_targets)
+                training_loss += batch_loss
 
                 self.backward_pass(activation, mini_batch_targets)
                 self.update_parameters()
 
-            training_loss = training_loss / train_data.shape[0]
+                if verbosity == 2:
+                    print("Mini batch input:")
+                    print(mini_batch)
+                    print("Mini batch targets:")
+                    print(mini_batch_targets)
+                    print("Network outpus:")
+                    print(activation)
+                    print("Mini batch loss: {batch_loss}".format(batch_loss=batch_loss))
 
-
+            training_loss *= 1 / train_data.shape[0]
+            '''
+            if self.regularization:
+                training_loss += sum(
+                    [self.regularization(layer.weights) + self.regularization(layer.biases) for layer in
+                     self.layers])
+            '''
             training_losses.append(training_loss)
 
-            if val_data and val_targets:
+            if verbosity >= 1:
+                print("Training loss: {training_loss}".format(training_loss=training_loss))
+            if 'accuracy' in metrics and verbosity >= 1:
+                training_accuracy = self.accuracy(train_data, targets)
+                print("Training accuracy: {training_accuracy}".format(training_accuracy=training_accuracy))
+
+            if val_data is not None and val_targets is not None:
                 activation = self.forward_pass(val_data)
 
-                validation_loss = 1 / val_data.shape[0] * self.loss(activation, val_targets)
+                validation_loss = self.loss(activation, val_targets)
+                validation_loss *= 1 / val_data.shape[0]
+                '''
+                if self.regularization:
+                    validation_loss += sum(
+                        [self.regularization(layer.weights) + self.regularization(layer.biases) for layer in
+                         self.layers])
+                '''
                 validation_losses.append(validation_loss)
+                if verbosity >= 1:
+                    print("Validation loss: {validation_loss}".format(validation_loss=validation_loss))
+                if 'accuracy' in metrics and verbosity >= 1:
+                    validation_accuracy = self.accuracy(val_data, val_targets)
+                    print("Validation accuracy: {validation_accuracy}".format(validation_accuracy=validation_accuracy))
 
         return training_losses, validation_losses
 
     def add(self, layer):
+        """
+        Method for adding layers to the network.
+        :param layer: Layer object.
+        :return: None
+        """
         if len(self.layers) > 0:
             if isinstance(layer, Input):
                 raise ValueError("An input layer can only be the first layer")
@@ -219,6 +378,15 @@ class Network:
         self.layers.append(layer)
 
     def compile(self, loss, regularization, reg_rate, learning_rate):
+        """
+        Method for initializing parameters important for training.
+        Call this method after all layers have been added.
+        :param loss: String indicating loss function.
+        :param regularization: String indicating type of regularization.
+        :param reg_rate: Regularization rate.
+        :param learning_rate: Learning rate.
+        :return: None
+        """
         self.reg_rate = reg_rate
         num_layers = len(self.layers)
         for i in range(num_layers):
@@ -238,25 +406,23 @@ class Network:
             self.regularization = self._l2
 
     def forward_pass(self, x):
-        i = 1
+        """
+        Forwards pass for the network.
+        :param x: Input data.
+        :return: Activation of last layer.
+        """
         for layer in self.layers:
             x = layer.forward_pass(x)
-            '''
-            print("---------------")
-            print("Layer {i}".format(i=i))
-            print("Weights")
-            print(layer.weights)
-            print("Biases")
-            print(layer.biases)
-            print("Activations")
-            print(x)
-            print("---------------")
-            '''
-            i += 1
 
         return x
 
     def backward_pass(self, z, t):
+        """
+        Backward pass for the network.
+        :param z: Activation of last layer.
+        :param t: Targets for the input.
+        :return: None
+        """
 
         # Calculating the first of the Jacobians
         J = self.loss(z, t, derivative=True)
@@ -266,6 +432,10 @@ class Network:
             J = layer.backward_pass(J)
 
     def update_parameters(self):
+        """
+        Updates the weights and biases for each (applicable) layer in the network.
+        :return: None
+        """
         for layer in self.layers:
             if not (isinstance(layer, Input) or isinstance(layer, Softmax)):
 
@@ -286,47 +456,95 @@ class Network:
 
                 layer.biases = layer.biases - layer.learning_rate * batch_b_gradient
 
-    def predict(self, x):
+    def accuracy(self, x, t):
+        """
+        Calculates accuracy.
+        :param x: Input data.
+        :param t: Targets.
+        :return: Accuracy
+        """
+        prediction = np.argmax(self.predict(x), axis=1)
+        real_class = np.argmax(t, axis=1)
+        accuracy = 0
+        num_samples = len(prediction)
+        for i in range(num_samples):
+            if prediction[i] == real_class[i]:
+                accuracy += 1
+        return accuracy / num_samples
 
-        # axis = 1 if x.ndim == 2 else 0
-        # return np.argmax(self.forward_pass(x), axis=1)
+    def predict(self, x):
+        """
+        :param x: Input data.
+        :return: Output of network.
+        """
+
         return self.forward_pass(x)
 
     def evaluate(self, x_test, y_test):
+        """
+        Calculates loss.
+        :param x_test: Input data.
+        :param y_test: Input targets.
+        :return: Averaged loss.
+        """
         activation = self.forward_pass(x_test)
         test_loss = self.loss(activation, y_test)
+        test_loss *= 1 / len(y_test)
+        '''
         if self.regularization:
             test_loss += sum(
                 [self.regularization(layer.weights) + self.regularization(layer.biases) for layer in
                  self.layers])
+        '''
         return test_loss
 
     def _mse(self, z, t, derivative=False):
+        """
+        Mean Squared Error loss function.
+        :param z: Output of network.
+        :param t: Targets.
+        :param derivative: True if method should return the derivative, False otherwise.
+        :return: Loss (or derivative of loss). Not averaged.
+        """
         n = z.shape[-1]
-
         if derivative:
             return 2 / n * (z - t)
 
         axis = 1 if z.ndim == 2 else 0
-        # return 1 / n * np.sum((z - t) ** 2, axis=axis)
         return sum(1 / n * np.sum((z - t) ** 2, axis=axis))
 
     def _cross_entropy(self, z, t, derivative=False):
-
+        """
+        Categorical Cross Entropy loss function.
+        :param z: Output of network.
+        :param t: Targets.
+        :param derivative: True if method should return the derivative, False otherwise.
+        :return: Loss (or derivative of loss). Not averaged.
+        """
         if derivative:
             return np.where(z != 0, -t * 1 / z, 0.0)
         axis = 1 if z.ndim == 2 else 0
-        # return np.sum(t * np.log(z + 1.e-17), axis=axis)
-        return sum(-np.sum(t * np.log(z + 1.e-17), axis=axis))
+        return sum(-np.sum(t * np.log(z), axis=axis))
 
     def _l1(self, w, derivative=False):
+        """
+        L1 regularization.
+        :param w: Numpy array containing weights or biases.
+        :param derivative: True if method should return the derivative, False otherwise.
+        :return: Regularization. Note: multiplied by regularization rate.
+        """
 
         if derivative:
             return self.reg_rate * np.sign(w)
         return self.reg_rate * np.sum(np.absolute(w))
 
     def _l2(self, w, derivative=False):
-
+        """
+        L2 regularization.
+        :param w: Numpy array containing weights or biases.
+        :param derivative: True if method should return the derivative, False otherwise.
+        :return: Regularization. Note: multiplied by regularization rate.
+        """
         if derivative:
             return self.reg_rate * w
 
@@ -334,81 +552,4 @@ class Network:
 
 
 if __name__ == "__main__":
-    '''
-    model = Network()
-
-    model.add(Input(input_size=2))
-    model.add(FullyConnected(neurons=3,
-                             activation='linear'
-                             ))
-    model.add(FullyConnected(neurons=2,
-                             activation='sigmoid'
-                             ))
-    model.add(Softmax())
-
-    a = np.array([1, 2, 3])
-    b = np.array([3, 3, 3])
-    c = np.array([[1, 2], [3, 3], [1, 1]])
-
-    # model.forward_pass(a)
-    # model.forward_pass(b)
-    model.compile(loss="cross_entropy", regularization="l1", reg_rate=0.001, learning_rate=0.1)
-
-    # model.forward_pass(c)
-
-    target = np.array([[0, 1], [1, 0], [0, 1]])
-
-    print("---------------")
-    print("BACKWARD PASS")
-
-    # model.backward_pass(c, target)
-
-    # fit(self, train_data, targets, batch_size, epochs=50, val_data=None, val_targets=None)
-    train_loss, val_loss = model.fit(train_data=c, targets=target, batch_size=2, epochs=1000)
-
-    print(train_loss[-1])
-    print(val_loss)
-    plt.plot(train_loss)
-    plt.show()
-
-    print(model.predict(c))
-    '''
-
-    # XOR Test
-    model = Network()
-
-    model.add(Input(input_size=2))
-    model.add(FullyConnected(neurons=3,
-                             activation='tanh',
-                             weight_range=(-0.5, 0.5)
-                             ))
-    model.add(FullyConnected(neurons=1,
-                             activation='tanh',
-                             weight_range=(-0.5, 0.5)
-                             ))
-
-    x_train = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
-    y_train = np.array([[0], [1], [1], [0]])
-
-    print(model.layers[1].weights)
-    print(model.layers[2].weights)
-    print(model.predict(x_train))
-    print("_____")
-
-    model.compile(loss="mse", regularization='l1', reg_rate=0.001, learning_rate=0.1)
-    train_loss, val_loss = model.fit(train_data=x_train,
-                                     targets=y_train,
-                                     batch_size=2,
-                                     epochs=10000)
-    print("_____")
-    print(model.layers[1].weights)
-    print(model.layers[2].weights)
-    print("_____")
-
-    plt.plot(train_loss)
-    plt.show()
-    print(model.predict(x_train))
-    print(model.predict(x_train[0]))
-    print(train_loss)
-
-
+    pass
