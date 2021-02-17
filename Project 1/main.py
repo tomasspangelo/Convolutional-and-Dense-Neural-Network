@@ -1,6 +1,7 @@
 import sys
-import matplotlib.pyplot as plt
 from configparser import ConfigParser
+
+import matplotlib.pyplot as plt
 from data_generator import DataGenerator
 from network import Network, Input, FullyConnected, Softmax
 
@@ -40,7 +41,7 @@ def init_network(network_config):
     model = Network()
 
     input_size = int(network_config['input_size'])
-    layers = eval(network_config['layers'])  # Possible bug
+    layers = eval(network_config['layers'])
     weight_ranges = eval(network_config['weight_ranges'])
     softmax = network_config.getboolean('softmax')
 
