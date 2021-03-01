@@ -1,14 +1,6 @@
 import numpy as np
 from layers import Input, Softmax
 
-class Conv1D:
-    def __init__(self):
-        pass
-
-class Conv2D:
-    def __init__(self):
-        pass
-
 
 class Network:
     """
@@ -111,10 +103,23 @@ class Network:
 
             prev_layer = self.layers[-1]
             layer.prev_layer = prev_layer
-            if not isinstance(layer, Softmax):
-                layer.initialize_weights(input_size=prev_layer.neurons)
-                layer.initialize_biases()
+            if isinstance(layer, Conv2D):
+                if isinstance(prev_layer, Conv2D):
+                    layer.add_input_channels(prev_layer.channels)
+                else:
+                    layer.add_input_channels(1)
+            elif not isinstance(layer, Softmax):
+                if isinstance(prev_layer, Conv2D):
+                    prev_layer.flatten = True
+                    input_size = prev_layer.channels * prev_layer.kernel_size[0] * prev_layer.kernel_size[1]
+                    layer.initialize_weights(input_size=input_size)
+                elif isinstance(prev_layer, Conv1D):
+                    pass
+                else:
+                    layer.initialize_weights(input_size=prev_layer.neurons)
+                    layer.initialize_biases()
             else:
+                # TODO: Layer before Softmax must be Dense??
                 layer.neurons = prev_layer.neurons
         else:
             if not isinstance(layer, Input):
