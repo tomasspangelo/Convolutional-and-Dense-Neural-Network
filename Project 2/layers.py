@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import numpy as np
 
 
@@ -147,7 +149,7 @@ class Input(Layer):
 
 class Conv1D(Layer):
     def __init__(self, activation, kernel_size, num_kernels, stride, mode, weight_range=(-0.5, 0.5)):
-        # TODO: Fix input size for CONV1D
+        # TODO: Fix input size and neurons for Conv1D (and Conv2D)
         super().__init__(input_size=0, neurons=0, activation=activation)
         if not self.activation:
             raise ValueError("'{activation}' is not a valid activation function for a fully connected layer.".format(
@@ -162,14 +164,15 @@ class Conv1D(Layer):
         self.mode = mode
         self.weight_range = weight_range
 
-        self.book_keeping = {}  # TODO: Find appropriate data structure to bookkeep
-
     def forward_pass(self, x):
-        # x = self._add_padding(x)
+
         batch_size = x.shape[0]
-        sample, output_width = self._add_padding(x[-1, -1])
-        padded_width = len(sample)
+        left_padding, right_padding, output_width = self._add_padding(x[-1, -1], pad=False)
+        padded_width = len(x[-1, -1]) + left_padding + right_padding
         sum_in = np.zeros((batch_size, self.channels, output_width))
+
+        weight_dict = defaultdict(lambda: [])
+        input_dict = defaultdict(lambda: [])
 
         for sample_num in range(len(x)):
             sample = x[sample_num]
@@ -179,11 +182,19 @@ class Conv1D(Layer):
                     for k in range(self.channels_in):
                         sample_in_channel, _ = self._add_padding(sample[k])
                         for l in range(self.kernel_size):
-                            sum_in[sample_num, i, index] += sample_in_channel[j+l] * self.kernels[i, k, l]
+                            original_j = j + l - left_padding
+                            sum_in[sample_num, i, index] += sample_in_channel[j + l] * self.kernels[i, k, l]
+                            weight_dict[(i, k, l)].append((sample_in_channel[j + l], (sample_num, i, index)))
+                            if 0 <= original_j < padded_width - left_padding - right_padding:
+                                input_dict[(sample_num, k, original_j)].append(
+                                    (self.kernels[i, k, l], (sample_num, i, index)))
                     index += 1
+        self.sum_in = sum_in
+        self.weight_dict = weight_dict
+        self.input_dict = input_dict
         return self.activation(sum_in)
 
-    def _add_padding(self, x):
+    def _add_padding(self, x, pad=True):
         """
         Adds padding to a single data point.
         :param x: sample x.
@@ -191,7 +202,8 @@ class Conv1D(Layer):
         """
         input_width = len(x)
         if self.mode == "valid":
-            return x, int((input_width - self.kernel_size + 1) / self.stride)
+            output_width = int((input_width - self.kernel_size + 1) / self.stride)
+            return x, output_width if pad else 0, 0, output_width
 
         if self.mode == "same":
             output_width = int(np.ceil(input_width / self.stride))
@@ -200,6 +212,8 @@ class Conv1D(Layer):
         total_padding = (output_width - 1) * self.stride + self.kernel_size - input_width
         left_padding = int(total_padding / 2)
         right_padding = total_padding - left_padding
+        if not pad:
+            return left_padding, right_padding, output_width
         return np.pad(x, (left_padding, right_padding), 'constant', constant_values=0), output_width
 
     def initialize_kernels(self, channels_in):
@@ -233,34 +247,43 @@ class Conv2D(Layer):
         self.mode = mode
         self.weight_range = weight_range
 
-        self.book_keeping = {}  # TODO: Find appropriate data structure to bookkeep
-
     def forward_pass(self, x):
-        # x = self._add_padding(x)
         batch_size = x.shape[0]
-        sample, output_size = self._add_padding(x[-1, -1])
-        padded_height = sample.shape[0]
-        padded_width = sample.shape[1]
+        top_padding, bottom_padding, left_padding, right_padding, output_size = self._add_padding(x[-1, -1], pad=False)
+        padded_height = x[-1, -1].shape[0] + top_padding + bottom_padding
+        padded_width = x[-1, -1].shape[1] + left_padding + right_padding
         sum_in = np.zeros((batch_size, self.channels,) + output_size)
+
+        weight_dict = defaultdict(lambda: [])
+        input_dict = defaultdict(lambda: [])
 
         for sample_num in range(len(x)):
             sample = x[sample_num]
             for i in range(self.channels):
-                row_index = 0
+                r_index = 0
                 for j in range(0, padded_height - self.kernel_size[0] + 1, self.stride[0]):
-                    column_index = 0
+                    c_index = 0
                     for k in range(0, padded_width - self.kernel_size[1] + 1, self.stride[1]):
                         for l in range(self.channels_in):
                             sample_in_channel, _ = self._add_padding(sample[l])
                             for m in range(self.kernel_size[0]):
                                 for n in range(self.kernel_size[1]):
-                                    sum_in[sample_num, i, row_index, column_index] += sample_in_channel[j+m, k+n] * \
-                                                                                      self.kernels[i, l, m, n]
-                        column_index += 1
-                    row_index += 1
+                                    original_j = j + m - top_padding
+                                    original_k = k + n - left_padding
+                                    sum_in[sample_num, i, r_index, c_index] += sample_in_channel[j + m, k + n] * \
+                                                                               self.kernels[i, l, m, n]
+                                    weight_dict[(i, l, m, n)].append(
+                                        (sample_in_channel[j + m, k + n], (sample_num, i, r_index, c_index)))
+                                    original_height = padded_height - top_padding - bottom_padding
+                                    original_width = padded_width - left_padding - right_padding
+                                    if 0 <= original_j < original_height and 0 <= original_k < original_width:
+                                        input_dict[(sample_num, l, original_j, original_k)].append(
+                                            (self.kernels[i, l, m, n], (sample_num, i, r_index, c_index)))
+                        c_index += 1
+                    r_index += 1
         return self.activation(sum_in)
 
-    def _add_padding(self, x):
+    def _add_padding(self, x, pad=True):
         """
         Adds padding to a single data point.
         :param x: sample x.
@@ -294,7 +317,8 @@ class Conv2D(Layer):
             total_padding = (output_width - 1) * self.stride[1] + self.kernel_size[1] - input_width
             left_padding = int(total_padding / 2)
             right_padding = total_padding - left_padding
-
+        if not pad:
+            return top_padding, bottom_padding, left_padding, right_padding, (output_height, output_width)
         return np.pad(x, ((top_padding, bottom_padding), (left_padding, right_padding)), 'constant',
                       constant_values=0), (output_height, output_width)
 
@@ -444,10 +468,12 @@ if __name__ == "__main__":
                           [[1, 0, 1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 0, 0, 0, 1, 0, 0]]])
                           
     '''
-    layer = Conv2D(activation='linear', kernel_size=(2, 2), num_kernels=3, stride=(1, 1), mode=('same','same'))
+    layer = Conv2D(activation='linear', kernel_size=(2, 2), num_kernels=3, stride=(1, 1), mode=('same', 'same'))
     layer.initialize_kernels(2)
-    test_data = np.array([[[[1, 0, 1, 1],[0, 1, 0, 1],[1, 1, 0, 0],[0, 1, 0, 1]], [[1, 1, 1, 1],[1, 0, 1, 1],[1, 1, 1, 1],[1, 0, 0, 0]]],
-                          [[[1, 0, 1, 1],[0, 1, 0, 1],[0, 0, 1, 1],[1, 0, 1, 0]], [[1, 1, 1, 1],[1, 0, 1, 1],[0, 0, 1, 1],[0, 0, 1, 1]]]])
+    test_data = np.array([[[[1, 0, 1, 1], [0, 1, 0, 1], [1, 1, 0, 0], [0, 1, 0, 1]],
+                           [[1, 1, 1, 1], [1, 0, 1, 1], [1, 1, 1, 1], [1, 0, 0, 0]]],
+                          [[[1, 0, 1, 1], [0, 1, 0, 1], [0, 0, 1, 1], [1, 0, 1, 0]],
+                           [[1, 1, 1, 1], [1, 0, 1, 1], [0, 0, 1, 1], [0, 0, 1, 1]]]])
     out = layer.forward_pass(test_data)
     print(out)
     print(out.shape)
