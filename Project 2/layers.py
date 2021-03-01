@@ -145,6 +145,177 @@ class Input(Layer):
         raise TypeError("The input layer does not have a backward pass method.")
 
 
+class Conv1D(Layer):
+    def __init__(self, activation, kernel_size, num_kernels, stride, mode, weight_range=(-0.5, 0.5)):
+        # TODO: Fix input size for CONV1D
+        super().__init__(input_size=0, neurons=0, activation=activation)
+        if not self.activation:
+            raise ValueError("'{activation}' is not a valid activation function for a fully connected layer.".format(
+                activation=activation))
+        self.kernels = []
+        self.channels = num_kernels
+        self.channels_in = 1  # Remove?
+        self.kernel_size = kernel_size
+        self.num_kernels = num_kernels
+        self.flatten = False
+        self.stride = stride
+        self.mode = mode
+        self.weight_range = weight_range
+
+        self.book_keeping = {}  # TODO: Find appropriate data structure to bookkeep
+
+    def forward_pass(self, x):
+        # x = self._add_padding(x)
+        batch_size = x.shape[0]
+        sample, output_width = self._add_padding(x[-1, -1])
+        padded_width = len(sample)
+        sum_in = np.zeros((batch_size, self.channels, output_width))
+
+        for sample_num in range(len(x)):
+            sample = x[sample_num]
+            for i in range(self.channels):
+                index = 0
+                for j in range(0, padded_width - self.kernel_size + 1, self.stride):
+                    for k in range(self.channels_in):
+                        sample_in_channel, _ = self._add_padding(sample[k])
+                        for l in range(self.kernel_size):
+                            sum_in[sample_num, i, index] += sample_in_channel[j+l] * self.kernels[i, k, l]
+                    index += 1
+        return self.activation(sum_in)
+
+    def _add_padding(self, x):
+        """
+        Adds padding to a single data point.
+        :param x: sample x.
+        :return: x with padding
+        """
+        input_width = len(x)
+        if self.mode == "valid":
+            return x, int((input_width - self.kernel_size + 1) / self.stride)
+
+        if self.mode == "same":
+            output_width = int(np.ceil(input_width / self.stride))
+        elif self.mode == "full":
+            output_width = int(np.ceil((input_width + self.kernel_size - 1) / self.stride))
+        total_padding = (output_width - 1) * self.stride + self.kernel_size - input_width
+        left_padding = int(total_padding / 2)
+        right_padding = total_padding - left_padding
+        return np.pad(x, (left_padding, right_padding), 'constant', constant_values=0), output_width
+
+    def initialize_kernels(self, channels_in):
+        self.channels_in = channels_in
+        self.kernels = np.random.uniform(self.weight_range[0], self.weight_range[1],
+                                         (self.num_kernels, channels_in, self.kernel_size))
+
+    def backward_pass(self, J_L_Z):
+        pass
+
+    def _valid(self):
+        pass
+
+    def _full(self):
+        pass
+
+    def _same(self):
+        pass
+
+
+class Conv2D(Layer):
+    def __init__(self, activation, kernel_size, num_kernels, stride, mode, weight_range=(-0.5, 0.5)):
+        super().__init__(input_size=0, neurons=0, activation=activation)
+        self.kernels = []
+        self.channels = num_kernels
+        self.channels_in = 1  # Remove?
+        self.kernel_size = kernel_size
+        self.num_kernels = num_kernels
+        self.flatten = False
+        self.stride = stride
+        self.mode = mode
+        self.weight_range = weight_range
+
+        self.book_keeping = {}  # TODO: Find appropriate data structure to bookkeep
+
+    def forward_pass(self, x):
+        # x = self._add_padding(x)
+        batch_size = x.shape[0]
+        sample, output_size = self._add_padding(x[-1, -1])
+        padded_height = sample.shape[0]
+        padded_width = sample.shape[1]
+        sum_in = np.zeros((batch_size, self.channels,) + output_size)
+
+        for sample_num in range(len(x)):
+            sample = x[sample_num]
+            for i in range(self.channels):
+                row_index = 0
+                for j in range(0, padded_height - self.kernel_size[0] + 1, self.stride[0]):
+                    column_index = 0
+                    for k in range(0, padded_width - self.kernel_size[1] + 1, self.stride[1]):
+                        for l in range(self.channels_in):
+                            sample_in_channel, _ = self._add_padding(sample[l])
+                            for m in range(self.kernel_size[0]):
+                                for n in range(self.kernel_size[1]):
+                                    sum_in[sample_num, i, row_index, column_index] += sample_in_channel[j+m, k+n] * \
+                                                                                      self.kernels[i, l, m, n]
+                        column_index += 1
+                    row_index += 1
+        return self.activation(sum_in)
+
+    def _add_padding(self, x):
+        """
+        Adds padding to a single data point.
+        :param x: sample x.
+        :return: x with padding
+        """
+
+        input_height = x.shape[0]
+        if self.mode[0] == "valid":
+            output_height = int((input_height - self.kernel_size[0] + 1) / self.stride[0])
+            top_padding = 0
+            bottom_padding = 0
+        else:
+            if self.mode[0] == "same":
+                output_height = int(np.ceil(input_height / self.stride[0]))
+            elif self.mode[0] == "full":
+                output_height = int(np.ceil((input_height + self.kernel_size[0] - 1) / self.stride[0]))
+            total_padding = (output_height - 1) * self.stride[0] + self.kernel_size[0] - input_height
+            top_padding = int(total_padding / 2)
+            bottom_padding = total_padding - top_padding
+
+        input_width = x.shape[1]
+        if self.mode[1] == "valid":
+            output_width = int((input_width - self.kernel_size[1] + 1) / self.stride[1])
+            left_padding = 0
+            right_padding = 0
+        else:
+            if self.mode[1] == "same":
+                output_width = int(np.ceil(input_width / self.stride[1]))
+            elif self.mode[1] == "full":
+                output_width = int(np.ceil((input_width + self.kernel_size[1] - 1) / self.stride[1]))
+            total_padding = (output_width - 1) * self.stride[1] + self.kernel_size[1] - input_width
+            left_padding = int(total_padding / 2)
+            right_padding = total_padding - left_padding
+
+        return np.pad(x, ((top_padding, bottom_padding), (left_padding, right_padding)), 'constant',
+                      constant_values=0), (output_height, output_width)
+
+    def backward_pass(self, J_L_Z):
+        pass
+
+    def initialize_kernels(self, channels_in):
+        self.channels_in = channels_in
+        self.kernels = np.random.uniform(self.weight_range[0], self.weight_range[1],
+                                         (self.num_kernels, channels_in,) + self.kernel_size)
+
+    def _3_stride(self):
+        pass
+
+    def _2_stride(self):
+        pass
+
+    def _1_stride(self):
+        pass
+
+
 class FullyConnected(Layer):
     """
     Class for Fully Connected layers, inherits from superclass Layer.
@@ -263,3 +434,23 @@ class Softmax(Layer):
         # Corresponds to J_L_Z dot J_soft
         J_L_Y = np.einsum("ij, ijk ->ik", J_L_Z, J_soft)
         return J_L_Y
+
+
+if __name__ == "__main__":
+    '''
+    layer = Conv1D(activation='linear', kernel_size=3, num_kernels=3, stride=2, mode='same')
+    layer.initialize_kernels(2)
+    test_data = np.array([[[1, 0, 1, 1, 0, 1, 0, 1, 0, 1], [1, 1, 1, 1, 0, 0, 1, 1, 1, 1]],
+                          [[1, 0, 1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 0, 0, 0, 1, 0, 0]]])
+                          
+    '''
+    layer = Conv2D(activation='linear', kernel_size=(2, 2), num_kernels=3, stride=(1, 1), mode=('same','same'))
+    layer.initialize_kernels(2)
+    test_data = np.array([[[[1, 0, 1, 1],[0, 1, 0, 1],[1, 1, 0, 0],[0, 1, 0, 1]], [[1, 1, 1, 1],[1, 0, 1, 1],[1, 1, 1, 1],[1, 0, 0, 0]]],
+                          [[[1, 0, 1, 1],[0, 1, 0, 1],[0, 0, 1, 1],[1, 0, 1, 0]], [[1, 1, 1, 1],[1, 0, 1, 1],[0, 0, 1, 1],[0, 0, 1, 1]]]])
+    out = layer.forward_pass(test_data)
+    print(out)
+    print(out.shape)
+    print("___")
+    print(layer.kernels)
+    print(layer.kernels.shape)
