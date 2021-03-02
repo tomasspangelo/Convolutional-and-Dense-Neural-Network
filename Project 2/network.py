@@ -105,21 +105,25 @@ class Network:
             layer.prev_layer = prev_layer
             if isinstance(layer, Conv2D):
                 if isinstance(prev_layer, Conv2D):
-                    layer.add_input_channels(prev_layer.channels)
+                    layer.initialize_kernels(prev_layer.channels, input_size=prev_layer.get_output_size(flatten=False))
                 else:
-                    layer.add_input_channels(1)
-            elif not isinstance(layer, Softmax):
+                    layer.initialize_kernels(1, input_size=prev_layer.input_size)
+            elif isinstance(layer, Conv1D):
+                if isinstance(prev_layer, Conv2D) or isinstance(prev_layer, Conv1D):
+                    layer.add_input_channels(prev_layer.channels, input_size=prev_layer.get_output_size())
+                else:
+                    layer.initialize_kernels(1, input_size=prev_layer.input_size)
+            elif isinstance(layer, FullyConnected):
                 if isinstance(prev_layer, Conv2D):
-                    prev_layer.flatten = True
-                    input_size = prev_layer.channels * prev_layer.kernel_size[0] * prev_layer.kernel_size[1]
+                    input_size = prev_layer.channels * prev_layer.get_output_size()
                     layer.initialize_weights(input_size=input_size)
                 elif isinstance(prev_layer, Conv1D):
-                    pass
+                    input_size = prev_layer.channels * prev_layer.get_output_size()
+                    layer.initialize_weights(input_size=input_size)
                 else:
                     layer.initialize_weights(input_size=prev_layer.neurons)
                     layer.initialize_biases()
             else:
-                # TODO: Layer before Softmax must be Dense??
                 layer.neurons = prev_layer.neurons
         else:
             if not isinstance(layer, Input):

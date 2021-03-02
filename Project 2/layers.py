@@ -159,7 +159,6 @@ class Conv1D(Layer):
         self.channels_in = 1  # Remove?
         self.kernel_size = kernel_size
         self.num_kernels = num_kernels
-        self.flatten = False
         self.stride = stride
         self.mode = mode
         self.weight_range = weight_range
@@ -216,7 +215,20 @@ class Conv1D(Layer):
             return left_padding, right_padding, output_width
         return np.pad(x, (left_padding, right_padding), 'constant', constant_values=0), output_width
 
-    def initialize_kernels(self, channels_in):
+    def get_output_size(self):
+        input_width = self.input_size
+        if self.mode == "valid":
+            output_width = int((input_width - self.kernel_size + 1) / self.stride)
+            return output_width
+
+        if self.mode == "same":
+            output_width = int(np.ceil(input_width / self.stride))
+        elif self.mode == "full":
+            output_width = int(np.ceil((input_width + self.kernel_size - 1) / self.stride))
+        return output_width
+
+    def initialize_kernels(self, channels_in, input_size):
+        self.input_size = input_size
         self.channels_in = channels_in
         self.kernels = np.random.uniform(self.weight_range[0], self.weight_range[1],
                                          (self.num_kernels, channels_in, self.kernel_size))
@@ -225,11 +237,11 @@ class Conv1D(Layer):
 
         # (sample_num, i, index)
         # Derivative of output w.r.t. the sum in (diagonal of Jacobian)
-        #J_sum_diag = self.activation(self.sum_in, derivative=True)
+        # J_sum_diag = self.activation(self.sum_in, derivative=True)
 
         # Derivative of output w.r.t the output of the previous layer.
         # Corresponds to J_sum_diag dot W.T
-        #J_Z_Y = np.einsum("ij,jk->ijk", J_sum_diag, np.transpose(self.weights))
+        # J_Z_Y = np.einsum("ij,jk->ijk", J_sum_diag, np.transpose(self.weights))
 
         J_L_K = np.zeros(self.kernels.shape)
         for key in self.weight_dict:
@@ -241,8 +253,8 @@ class Conv1D(Layer):
                 # sum[1]: channel i
                 # sum[2]: index
                 num_sum_in = self.sum_in[sum_in[0], sum_in[1], sum_in[2]]
-                delta = self.activation(num_sum_in, activation=True)*J_L_Z[sum_in[0], sum_in[1], sum_in[2]]
-                J_L_K[key[0], key[1], key[2]] += activation*delta
+                delta = self.activation(num_sum_in, activation=True) * J_L_Z[sum_in[0], sum_in[1], sum_in[2]]
+                J_L_K[key[0], key[1], key[2]] += activation * delta
 
         batch_size = J_L_Z.shape[0]
         J_L_Y = np.zeros(self.prev_layer.sum_in.shape)  # TODO: Take reduction of dimensions into account
@@ -259,11 +271,10 @@ class Conv1D(Layer):
                 # sum[2]: index
                 num_sum_in = self.sum_in[sum_in[0], sum_in[1], sum_in[2]]
                 delta = self.activation(num_sum_in, activation=True) * J_L_Z[sum_in[0], sum_in[1], sum_in[2]]
-                J_L_Y[key[0], key[1], key[2]] += kernel_weight*delta
+                J_L_Y[key[0], key[1], key[2]] += kernel_weight * delta
 
         self.weight_gradient = J_L_K
         return J_L_Y if not isinstance(self.prev_layer, Conv2D) else J_L_Y.reshape(self.prev_layer.sum_in.shape)
-
 
 
 class Conv2D(Layer):
@@ -274,7 +285,6 @@ class Conv2D(Layer):
         self.channels_in = 1  # Remove?
         self.kernel_size = kernel_size
         self.num_kernels = num_kernels
-        self.flatten = False
         self.stride = stride
         self.mode = mode
         self.weight_range = weight_range
@@ -354,15 +364,34 @@ class Conv2D(Layer):
         return np.pad(x, ((top_padding, bottom_padding), (left_padding, right_padding)), 'constant',
                       constant_values=0), (output_height, output_width)
 
+    def get_output_size(self, flatten=True):
+        input_height = self.input_size[0]
+        if self.mode[0] == "valid":
+            output_height = int((input_height - self.kernel_size[0] + 1) / self.stride[0])
+        else:
+            if self.mode[0] == "same":
+                output_height = int(np.ceil(input_height / self.stride[0]))
+            elif self.mode[0] == "full":
+                output_height = int(np.ceil((input_height + self.kernel_size[0] - 1) / self.stride[0]))
+        input_width = self.input_size[1]
+        if self.mode[1] == "valid":
+            output_width = int((input_width - self.kernel_size[1] + 1) / self.stride[1])
+        else:
+            if self.mode[1] == "same":
+                output_width = int(np.ceil(input_width / self.stride[1]))
+            elif self.mode[1] == "full":
+                output_width = int(np.ceil((input_width + self.kernel_size[1] - 1) / self.stride[1]))
+        return output_height * output_width if flatten else (output_height, output_width)
+
     def backward_pass(self, J_L_Z):
 
         # (sample_num, i, index)
         # Derivative of output w.r.t. the sum in (diagonal of Jacobian)
-        #J_sum_diag = self.activation(self.sum_in, derivative=True)
+        # J_sum_diag = self.activation(self.sum_in, derivative=True)
 
         # Derivative of output w.r.t the output of the previous layer.
         # Corresponds to J_sum_diag dot W.T
-        #J_Z_Y = np.einsum("ij,jk->ijk", J_sum_diag, np.transpose(self.weights))
+        # J_Z_Y = np.einsum("ij,jk->ijk", J_sum_diag, np.transpose(self.weights))
 
         J_L_K = np.zeros(self.kernels.shape)
         for key in self.weight_dict:
@@ -376,8 +405,8 @@ class Conv2D(Layer):
                 # sum[2]: index row
                 # sum[3]: index column
                 num_sum_in = self.sum_in[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
-                delta = self.activation(num_sum_in, activation=True)*J_L_Z[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
-                J_L_K[key[0], key[1], key[2], key[3]] += activation*delta
+                delta = self.activation(num_sum_in, activation=True) * J_L_Z[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
+                J_L_K[key[0], key[1], key[2], key[3]] += activation * delta
 
         J_L_Y = np.zeros(self.prev_layer.sum_in.shape)
 
@@ -391,13 +420,14 @@ class Conv2D(Layer):
                 # sum[1]: channel i
                 # sum[2]: index
                 num_sum_in = self.sum_in[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
-                delta = self.activation(num_sum_in, activation=True)*J_L_Z[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
-                J_L_Y[key[0], key[1], key[2], key[3]] += kernel_weight*delta
+                delta = self.activation(num_sum_in, activation=True) * J_L_Z[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
+                J_L_Y[key[0], key[1], key[2], key[3]] += kernel_weight * delta
 
         self.weight_gradient = J_L_K
         return J_L_Y
 
-    def initialize_kernels(self, channels_in):
+    def initialize_kernels(self, channels_in, input_size):
+        self.input_size = input_size
         self.channels_in = channels_in
         self.kernels = np.random.uniform(self.weight_range[0], self.weight_range[1],
                                          (self.num_kernels, channels_in,) + self.kernel_size)
