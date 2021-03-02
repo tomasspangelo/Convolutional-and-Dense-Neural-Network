@@ -1,5 +1,5 @@
 import numpy as np
-from layers import Input, Softmax
+from layers import Input, Softmax, Conv2D, Conv1D, FullyConnected
 
 
 class Network:
@@ -162,6 +162,16 @@ class Network:
         :return: Activation of last layer.
         """
         for layer in self.layers:
+            if isinstance(layer.prev_layer, Conv2D) and isinstance(layer, Conv1D):
+                shape = x.shape[:-2] + (-1,)
+                x = x.reshape(shape)
+            elif isinstance(layer.prev_layer, Conv2D) and isinstance(layer, FullyConnected):
+                # shape = (x.shape[0], np.prod(x.shape[1:]))
+                shape = (x.shape[0], -1)
+                x = x.reshape(shape)
+            elif isinstance(layer.prev_layer, Conv1D) and isinstance(layer, FullyConnected):
+                shape = (x.shape[0], -1)
+                x = x.reshape(shape)
             x = layer.forward_pass(x)
 
         return x
@@ -179,7 +189,14 @@ class Network:
 
         for i in range(len(self.layers) - 1, 0, -1):
             layer = self.layers[i]
-            J = layer.backward_pass(J)
+            downstream_layer = self.layers[i+1]
+            if isinstance(layer, Conv2D) and isinstance(downstream_layer, FullyConnected):
+                shape = layer.sum_in.shape
+                J = J.reshape(shape)
+            elif isinstance(layer, Conv1D) and isinstance(downstream_layer, FullyConnected):
+                shape = layer.sum_in.shape
+                J = J.reshape(shape)
+        J = layer.backward_pass(J)
 
     def update_parameters(self):
         """

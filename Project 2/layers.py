@@ -222,16 +222,48 @@ class Conv1D(Layer):
                                          (self.num_kernels, channels_in, self.kernel_size))
 
     def backward_pass(self, J_L_Z):
-        pass
 
-    def _valid(self):
-        pass
+        # (sample_num, i, index)
+        # Derivative of output w.r.t. the sum in (diagonal of Jacobian)
+        #J_sum_diag = self.activation(self.sum_in, derivative=True)
 
-    def _full(self):
-        pass
+        # Derivative of output w.r.t the output of the previous layer.
+        # Corresponds to J_sum_diag dot W.T
+        #J_Z_Y = np.einsum("ij,jk->ijk", J_sum_diag, np.transpose(self.weights))
 
-    def _same(self):
-        pass
+        J_L_K = np.zeros(self.kernels.shape)
+        for key in self.weight_dict:
+            for activation, sum_in in self.weight_dict[key]:
+                # key[0]: channel i
+                # key[1]: channel_in
+                # key[2]: l, offset/index in kernel
+                # sum[0]: sample_num
+                # sum[1]: channel i
+                # sum[2]: index
+                num_sum_in = self.sum_in[sum_in[0], sum_in[1], sum_in[2]]
+                delta = self.activation(num_sum_in, activation=True)*J_L_Z[sum_in[0], sum_in[1], sum_in[2]]
+                J_L_K[key[0], key[1], key[2]] += activation*delta
+
+        batch_size = J_L_Z.shape[0]
+        J_L_Y = np.zeros(self.prev_layer.sum_in.shape)  # TODO: Take reduction of dimensions into account
+        if isinstance(self.prev_layer, Conv2D):
+            J_L_Y = J_L_Y.reshape((batch_size, self.channels_in, -1))
+
+        for key in self.input_dict:
+            for kernel_weight, sum_in in self.input_dict[key]:
+                # key[0]: sample_num
+                # key[1]: channel_in
+                # key[2]: original_j (index activation at Y)
+                # sum[0]: sample_num
+                # sum[1]: channel i
+                # sum[2]: index
+                num_sum_in = self.sum_in[sum_in[0], sum_in[1], sum_in[2]]
+                delta = self.activation(num_sum_in, activation=True) * J_L_Z[sum_in[0], sum_in[1], sum_in[2]]
+                J_L_Y[key[0], key[1], key[2]] += kernel_weight*delta
+
+        self.weight_gradient = J_L_K
+        return J_L_Y if not isinstance(self.prev_layer, Conv2D) else J_L_Y.reshape(self.prev_layer.sum_in.shape)
+
 
 
 class Conv2D(Layer):
@@ -323,21 +355,52 @@ class Conv2D(Layer):
                       constant_values=0), (output_height, output_width)
 
     def backward_pass(self, J_L_Z):
-        pass
+
+        # (sample_num, i, index)
+        # Derivative of output w.r.t. the sum in (diagonal of Jacobian)
+        #J_sum_diag = self.activation(self.sum_in, derivative=True)
+
+        # Derivative of output w.r.t the output of the previous layer.
+        # Corresponds to J_sum_diag dot W.T
+        #J_Z_Y = np.einsum("ij,jk->ijk", J_sum_diag, np.transpose(self.weights))
+
+        J_L_K = np.zeros(self.kernels.shape)
+        for key in self.weight_dict:
+            for activation, sum_in in self.weight_dict[key]:
+                # key[0]: channel i
+                # key[1]: channel_in
+                # key[2]: m, offset/index in kernel
+                # key[3]: n, offset/index in kernel
+                # sum[0]: sample_num
+                # sum[1]: channel i
+                # sum[2]: index row
+                # sum[3]: index column
+                num_sum_in = self.sum_in[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
+                delta = self.activation(num_sum_in, activation=True)*J_L_Z[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
+                J_L_K[key[0], key[1], key[2], key[3]] += activation*delta
+
+        J_L_Y = np.zeros(self.prev_layer.sum_in.shape)
+
+        for key in self.input_dict:
+            for kernel_weight, sum_in in self.input_dict[key]:
+                # key[0]: sample_num
+                # key[1]: channel_in
+                # key[2]: original_j (index activation at Y)
+                # key[2]: original_k (index activation at Y)
+                # sum[0]: sample_num
+                # sum[1]: channel i
+                # sum[2]: index
+                num_sum_in = self.sum_in[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
+                delta = self.activation(num_sum_in, activation=True)*J_L_Z[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
+                J_L_Y[key[0], key[1], key[2], key[3]] += kernel_weight*delta
+
+        self.weight_gradient = J_L_K
+        return J_L_Y
 
     def initialize_kernels(self, channels_in):
         self.channels_in = channels_in
         self.kernels = np.random.uniform(self.weight_range[0], self.weight_range[1],
                                          (self.num_kernels, channels_in,) + self.kernel_size)
-
-    def _3_stride(self):
-        pass
-
-    def _2_stride(self):
-        pass
-
-    def _1_stride(self):
-        pass
 
 
 class FullyConnected(Layer):
