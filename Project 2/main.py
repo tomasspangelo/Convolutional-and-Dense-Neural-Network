@@ -1,5 +1,5 @@
 from data_generator import DataGenerator
-from layers import Input
+from layers import Input, Conv2D, FullyConnected, Softmax
 from network import Network
 
 
@@ -25,9 +25,9 @@ def main():
                                                  val_size=0.2,
                                                  )
 
-    x_train, y_train = train_set.flatten()
-    x_val, y_val = val_set.flatten()
-    x_test, y_test = test_set.flatten()
+    x_train, y_train = train_set.flatten_2D()
+    x_val, y_val = val_set.flatten_2D()
+    x_test, y_test = test_set.flatten_2D()
 
     x_train = add_channel(x_train)
     x_val = add_channel(x_val)
@@ -35,7 +35,40 @@ def main():
 
     model = Network()
 
-    model.add(Input(input_size=input_size))
+    model.add(Input(input_size=(20, 20)))
+
+    model.add(Conv2D(activation="relu",
+                     kernel_size=(4,4),
+                     num_kernels=4,
+                     stride=(1, 1),
+                     mode=("same", "same"),
+                     ))
+    model.add(Conv2D(activation="relu",
+                     kernel_size=(4, 4),
+                     num_kernels=2,
+                     stride=(1, 1),
+                     mode=("same", "same"),
+                     ))
+    model.add(FullyConnected(neurons=4,
+                             activation="tanh"
+    ))
+
+    model.add(Softmax())
+
+    model.compile(loss="cross_entropy",
+                  regularization="l2",
+                  reg_rate=0.001,
+                  learning_rate=0.1,
+                  )
+
+    train_loss, val_loss = model.fit(train_data=x_train,
+                                     targets=y_train,
+                                     batch_size=4,
+                                     epochs=20,
+                                     metrics=['accuracy'],
+                                     val_data=x_val,
+                                     val_targets=y_val,
+                                     verbosity=1)
 
 
 

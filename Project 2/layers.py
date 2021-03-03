@@ -253,7 +253,7 @@ class Conv1D(Layer):
                 # sum[1]: channel i
                 # sum[2]: index
                 num_sum_in = self.sum_in[sum_in[0], sum_in[1], sum_in[2]]
-                delta = self.activation(num_sum_in, activation=True) * J_L_Z[sum_in[0], sum_in[1], sum_in[2]]
+                delta = self.activation(num_sum_in, derivative=True) * J_L_Z[sum_in[0], sum_in[1], sum_in[2]]
                 J_L_K[key[0], key[1], key[2]] += activation * delta
 
         batch_size = J_L_Z.shape[0]
@@ -270,7 +270,7 @@ class Conv1D(Layer):
                 # sum[1]: channel i
                 # sum[2]: index
                 num_sum_in = self.sum_in[sum_in[0], sum_in[1], sum_in[2]]
-                delta = self.activation(num_sum_in, activation=True) * J_L_Z[sum_in[0], sum_in[1], sum_in[2]]
+                delta = self.activation(num_sum_in, derivative=True) * J_L_Z[sum_in[0], sum_in[1], sum_in[2]]
                 J_L_Y[key[0], key[1], key[2]] += kernel_weight * delta
 
         self.weight_gradient = J_L_K
@@ -323,7 +323,12 @@ class Conv2D(Layer):
                                             (self.kernels[i, l, m, n], (sample_num, i, r_index, c_index)))
                         c_index += 1
                     r_index += 1
-        return self.activation(sum_in)
+
+        self.sum_in = sum_in
+        self.weight_dict = weight_dict
+        self.input_dict = input_dict
+        self.act = self.activation(sum_in)
+        return self.act
 
     def _add_padding(self, x, pad=True):
         """
@@ -405,7 +410,7 @@ class Conv2D(Layer):
                 # sum[2]: index row
                 # sum[3]: index column
                 num_sum_in = self.sum_in[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
-                delta = self.activation(num_sum_in, activation=True) * J_L_Z[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
+                delta = self.activation(num_sum_in, derivative=True) * J_L_Z[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
                 J_L_K[key[0], key[1], key[2], key[3]] += activation * delta
 
         J_L_Y = np.zeros(self.prev_layer.sum_in.shape)
@@ -420,7 +425,7 @@ class Conv2D(Layer):
                 # sum[1]: channel i
                 # sum[2]: index
                 num_sum_in = self.sum_in[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
-                delta = self.activation(num_sum_in, activation=True) * J_L_Z[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
+                delta = self.activation(num_sum_in, derivative=True) * J_L_Z[sum_in[0], sum_in[1], sum_in[2], sum_in[3]]
                 J_L_Y[key[0], key[1], key[2], key[3]] += kernel_weight * delta
 
         self.weight_gradient = J_L_K
@@ -560,7 +565,7 @@ if __name__ == "__main__":
     test_data = np.array([[[1, 0, 1, 1, 0, 1, 0, 1, 0, 1], [1, 1, 1, 1, 0, 0, 1, 1, 1, 1]],
                           [[1, 0, 1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 0, 0, 0, 1, 0, 0]]])
                           
-    '''
+    
     layer = Conv2D(activation='linear', kernel_size=(2, 2), num_kernels=3, stride=(1, 1), mode=('same', 'same'))
     layer.initialize_kernels(2)
     test_data = np.array([[[[1, 0, 1, 1], [0, 1, 0, 1], [1, 1, 0, 0], [0, 1, 0, 1]],
@@ -573,3 +578,4 @@ if __name__ == "__main__":
     print("___")
     print(layer.kernels)
     print(layer.kernels.shape)
+    '''

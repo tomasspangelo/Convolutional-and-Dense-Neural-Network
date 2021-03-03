@@ -117,9 +117,11 @@ class Network:
                 if isinstance(prev_layer, Conv2D):
                     input_size = prev_layer.channels * prev_layer.get_output_size()
                     layer.initialize_weights(input_size=input_size)
+                    layer.initialize_biases()
                 elif isinstance(prev_layer, Conv1D):
                     input_size = prev_layer.channels * prev_layer.get_output_size()
                     layer.initialize_weights(input_size=input_size)
+                    layer.initialize_biases()
                 else:
                     layer.initialize_weights(input_size=prev_layer.neurons)
                     layer.initialize_biases()
@@ -172,9 +174,11 @@ class Network:
             elif isinstance(layer.prev_layer, Conv2D) and isinstance(layer, FullyConnected):
                 # shape = (x.shape[0], np.prod(x.shape[1:]))
                 shape = (x.shape[0], -1)
+                layer.prev_layer.act = layer.prev_layer.act.reshape(shape)
                 x = x.reshape(shape)
             elif isinstance(layer.prev_layer, Conv1D) and isinstance(layer, FullyConnected):
                 shape = (x.shape[0], -1)
+                layer.prev_layer.act = layer.prev_layer.act.reshape(shape)
                 x = x.reshape(shape)
             x = layer.forward_pass(x)
 
@@ -191,16 +195,17 @@ class Network:
         # Calculating the first of the Jacobians
         J = self.loss(z, t, derivative=True)
 
-        for i in range(len(self.layers) - 1, 0, -1):
+        num_layers = len(self.layers)
+        for i in range(num_layers - 1, 0, -1):
             layer = self.layers[i]
-            downstream_layer = self.layers[i+1]
+            downstream_layer = self.layers[i+1] if i < num_layers-1 else None
             if isinstance(layer, Conv2D) and isinstance(downstream_layer, FullyConnected):
                 shape = layer.sum_in.shape
                 J = J.reshape(shape)
             elif isinstance(layer, Conv1D) and isinstance(downstream_layer, FullyConnected):
                 shape = layer.sum_in.shape
                 J = J.reshape(shape)
-        J = layer.backward_pass(J)
+            J = layer.backward_pass(J)
 
     def update_parameters(self):
         """
@@ -213,8 +218,8 @@ class Network:
                 # Calculate averaged weight gradient, add regularization term if applicable,
                 # and update weights
                 weight_gradient = layer.weight_gradient
-                batch_w_gradient = 1 / weight_gradient.shape[0] * np.sum(weight_gradient, axis=0)
-                if self.regularization:
+                batch_w_gradient = 1 / weight_gradient.shape[0] * np.sum(weight_gradient, axis=0) # TODO: I don't think this will be correct with convolution
+                if self.regularization and not (isinstance(layer, Conv1D) or isinstance(layer, Conv2D)):
                     batch_w_gradient += self.regularization(layer.weights, derivative=True)
                 layer.weights = layer.weights - layer.learning_rate * batch_w_gradient
 
@@ -222,7 +227,7 @@ class Network:
                 # and update biases
                 bias_gradient = layer.bias_gradient
                 batch_b_gradient = 1 / bias_gradient.shape[0] * np.sum(bias_gradient, axis=0)
-                if self.regularization:
+                if self.regularization and not (isinstance(layer, Conv1D) or isinstance(layer, Conv2D)):
                     batch_b_gradient += self.regularization(layer.biases, derivative=True)
 
                 layer.biases = layer.biases - layer.learning_rate * batch_b_gradient

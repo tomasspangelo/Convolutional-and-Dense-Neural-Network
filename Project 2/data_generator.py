@@ -136,7 +136,7 @@ class DataSet:
         for image in images:
             self.add(image)
 
-    def flatten(self, one_hot=True):
+    def flatten_1D(self, one_hot=True):
         """
         Flattens the DataSet object to numpy arrays.
         :param one_hot: True if targets should be one hot.
@@ -158,6 +158,25 @@ class DataSet:
                     labels.append([image.get_label()])
 
         return np.array(flat_data), np.array(labels)
+
+    def flatten_2D(self, one_hot=True):
+
+        flat_data = []
+        labels = []
+
+        for c in self.data_dict:
+            class_list = self.data_dict[c]
+            for image in class_list:
+                flat_data.append(image.flat)
+                if one_hot:
+                    one_hot_vector = [0 for _ in range(len(Image.class_dict))]
+                    one_hot_vector[image.get_label()] = 1
+                    labels.append(one_hot_vector)
+                else:
+                    labels.append([image.get_label()])
+
+        return np.array(flat_data), np.array(labels)
+
 
     @staticmethod
     def _flatten(data_list, num_classes=4, one_hot=True):
