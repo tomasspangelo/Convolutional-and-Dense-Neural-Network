@@ -1,3 +1,5 @@
+import pickle
+
 import numpy as np
 from layers import Input, Softmax, Conv2D, Conv1D, FullyConnected
 
@@ -309,6 +311,30 @@ class Network:
             return self.reg_rate * w
 
         return self.reg_rate * 1 / 2 * np.sum(w ** 2)
+
+    def save(self, file_name, loss=None):
+        file = open("./pickle/"+file_name+".pickle", "wb")
+        pickle.dump(self, file)
+        file.close()
+        if loss:
+            file = open("./pickle/" + file_name + "_loss.pickle", "wb")
+            pickle.dump(loss, file)
+            file.close()
+
+    @staticmethod
+    def load(file_name, loss=False):
+        file = open("./pickle/" + file_name + ".pickle", "rb")
+        model = pickle.load(file)
+        file.close()
+        if loss:
+            file = open("./pickle/" + file_name + "_loss.pickle", "rb")
+            loss_arr = pickle.load(file)
+            file.close()
+
+        return (model, loss_arr) if loss else model
+
+
+
 
 
 if __name__ == "__main__":

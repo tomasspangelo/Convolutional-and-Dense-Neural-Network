@@ -119,6 +119,10 @@ class Layer:
 
         return np.exp(x) / np.sum(np.exp(x))
 
+    @staticmethod
+    def _default_val():
+        return []
+
 
 class Input(Layer):
     """
@@ -171,8 +175,8 @@ class Conv1D(Layer):
         padded_width = len(x[-1, -1]) + left_padding + right_padding
         sum_in = np.zeros((batch_size, self.channels, output_width))
 
-        weight_dict = defaultdict(lambda: [])
-        input_dict = defaultdict(lambda: [])
+        weight_dict = defaultdict(self._default_val)
+        input_dict = defaultdict(self._default_val)
 
         for sample_num in range(len(x)):
             sample = x[sample_num]
@@ -344,8 +348,8 @@ class Conv2D(Layer):
         padded_width = x[-1, -1].shape[1] + left_padding + right_padding
         sum_in = np.zeros((batch_size, self.channels,) + output_size)
 
-        weight_dict = defaultdict(lambda: [])
-        input_dict = defaultdict(lambda: [])
+        weight_dict = defaultdict(self._default_val)
+        input_dict = defaultdict(self._default_val)
 
         for sample_num in range(len(x)):
             sample = x[sample_num]
@@ -689,12 +693,14 @@ if __name__ == "__main__":
     print("___")
     print(layer.kernels)
     print(layer.kernels.shape)
-    
+    '''
     layer = Conv2D(activation='linear', kernel_size=(5, 5), num_kernels=5, stride=(1, 1), mode=('same', 'same'))
     layer.initialize_kernels(2, (10, 10))
     layer.visualize_kernels()
-    '''
-    layer = Conv1D(activation='linear', kernel_size=3, num_kernels=3, stride=2, mode='same')
-    layer.initialize_kernels(2, 1000000)
+    print(layer.kernels)
+
+    layer = Conv1D(activation='linear', kernel_size=4, num_kernels=3, stride=2, mode='same')
+    layer.initialize_kernels(5, 1000000)
     layer.visualize_kernels()
     print(layer.kernels)
+    input("Press enter to exit ")
