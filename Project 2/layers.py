@@ -276,6 +276,13 @@ class Conv1D(Layer):
         self.weight_gradient = J_L_K
         return J_L_Y if not isinstance(self.prev_layer, Conv2D) else J_L_Y.reshape(self.prev_layer.sum_in.shape)
 
+    def update_parameters(self, regularization=None):
+        weight_gradient = self.weight_gradient
+        batch_w_gradient = 1 / weight_gradient.shape[0] * weight_gradient
+        if regularization:
+            batch_w_gradient += regularization(self.kernels, derivative=True)
+        self.kernels = self.kernels - self.learning_rate * batch_w_gradient
+
 
 class Conv2D(Layer):
     def __init__(self, activation, kernel_size, num_kernels, stride, mode, weight_range=(-0.5, 0.5)):
@@ -437,6 +444,13 @@ class Conv2D(Layer):
         self.kernels = np.random.uniform(self.weight_range[0], self.weight_range[1],
                                          (self.num_kernels, channels_in,) + self.kernel_size)
 
+    def update_parameters(self, regularization=None):
+        weight_gradient = self.weight_gradient
+        batch_w_gradient = 1 / weight_gradient.shape[0] * weight_gradient
+        if regularization:
+            batch_w_gradient += regularization(self.kernels, derivative=True)
+        self.kernels = self.kernels - self.learning_rate * batch_w_gradient
+
 
 class FullyConnected(Layer):
     """
@@ -517,6 +531,24 @@ class FullyConnected(Layer):
         self.bias_gradient = bias_gradient
 
         return J_L_Y
+
+    def update_parameters(self, regularization=None):
+        weight_gradient = self.weight_gradient
+        batch_w_gradient = 1 / weight_gradient.shape[0] * np.sum(weight_gradient,
+                                                                 axis=0)
+        if regularization:
+            batch_w_gradient += regularization(self.weights, derivative=True)
+        self.weights = self.weights - self.learning_rate * batch_w_gradient
+
+        # Calculate averaged bias gradient, add regularization term if applicable,
+        # and update biases
+        bias_gradient = self.bias_gradient
+        batch_b_gradient = 1 / bias_gradient.shape[0] * np.sum(bias_gradient, axis=0)
+        if regularization:
+            batch_b_gradient += regularization(self.biases, derivative=True)
+
+        self.biases = self.biases - self.learning_rate * batch_b_gradient
+
 
 
 class Softmax(Layer):

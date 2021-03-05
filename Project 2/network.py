@@ -214,23 +214,7 @@ class Network:
         """
         for layer in self.layers:
             if not (isinstance(layer, Input) or isinstance(layer, Softmax)):
-
-                # Calculate averaged weight gradient, add regularization term if applicable,
-                # and update weights
-                weight_gradient = layer.weight_gradient
-                batch_w_gradient = 1 / weight_gradient.shape[0] * np.sum(weight_gradient, axis=0) # TODO: I don't think this will be correct with convolution
-                if self.regularization and not (isinstance(layer, Conv1D) or isinstance(layer, Conv2D)):
-                    batch_w_gradient += self.regularization(layer.weights, derivative=True)
-                layer.weights = layer.weights - layer.learning_rate * batch_w_gradient
-
-                # Calculate averaged bias gradient, add regularization term if applicable,
-                # and update biases
-                bias_gradient = layer.bias_gradient
-                batch_b_gradient = 1 / bias_gradient.shape[0] * np.sum(bias_gradient, axis=0)
-                if self.regularization and not (isinstance(layer, Conv1D) or isinstance(layer, Conv2D)):
-                    batch_b_gradient += self.regularization(layer.biases, derivative=True)
-
-                layer.biases = layer.biases - layer.learning_rate * batch_b_gradient
+                layer.update_parameters(self.regularization)
 
     def accuracy(self, x, t):
         """
