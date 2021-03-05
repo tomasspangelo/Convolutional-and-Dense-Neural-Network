@@ -284,6 +284,46 @@ class Conv1D(Layer):
             batch_w_gradient += regularization(self.kernels, derivative=True)
         self.kernels = self.kernels - self.learning_rate * batch_w_gradient
 
+    def visualize_kernels(self):
+        fig = plt.figure()
+
+        nrows = self.kernels.shape[0]
+        ncols = self.kernels.shape[1]
+
+        i = 0
+        for kernel in range(self.kernels.shape[0]):
+            for channels in range(self.kernels.shape[1]):
+                weight_matrix = self.kernels[kernel][channels]
+                max_weight = 2 ** np.ceil(np.log2(np.abs(weight_matrix).max()))
+
+                ax = fig.add_subplot(nrows, ncols, i + 1)
+
+                ax.patch.set_facecolor('gray')
+                ax.set_aspect('equal', 'box')
+                ax.xaxis.set_major_locator(plt.NullLocator())
+                ax.yaxis.set_major_locator(plt.NullLocator())
+
+                if i < ncols:
+                    ax.set_title("Channel {channel}".format(channel=i + 1))
+
+                if i % ncols == 0:
+                    ax.set_ylabel("Filter {filter}".format(filter=int(i / ncols) + 1))
+
+                for (x,), w in np.ndenumerate(weight_matrix):
+                    y = 0
+                    color = 'white' if w > 0 else 'black'
+                    size = np.sqrt(abs(w) / max_weight)
+                    rect = plt.Rectangle([x - size / 2, y - size / 2], size, size,
+                                         facecolor=color, edgecolor=color)
+                    ax.add_patch(rect)
+
+                ax.autoscale_view()
+                ax.invert_yaxis()
+
+                i += 1
+        fig.tight_layout()
+        fig.show()
+
 
 class Conv2D(Layer):
     def __init__(self, activation, kernel_size, num_kernels, stride, mode, weight_range=(-0.5, 0.5)):
@@ -649,8 +689,12 @@ if __name__ == "__main__":
     print("___")
     print(layer.kernels)
     print(layer.kernels.shape)
-    '''
+    
     layer = Conv2D(activation='linear', kernel_size=(5, 5), num_kernels=5, stride=(1, 1), mode=('same', 'same'))
     layer.initialize_kernels(2, (10, 10))
+    layer.visualize_kernels()
+    '''
+    layer = Conv1D(activation='linear', kernel_size=3, num_kernels=3, stride=2, mode='same')
+    layer.initialize_kernels(2, 1000000)
     layer.visualize_kernels()
     print(layer.kernels)
