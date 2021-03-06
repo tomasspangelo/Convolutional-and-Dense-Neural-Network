@@ -108,13 +108,19 @@ class Network:
             if isinstance(layer, Conv2D):
                 if isinstance(prev_layer, Conv2D):
                     layer.initialize_kernels(prev_layer.channels, input_size=prev_layer.get_output_size(flatten=False))
-                else:
+                elif isinstance(prev_layer, Input):
                     layer.initialize_kernels(1, input_size=prev_layer.input_size)
+                else:
+                    raise ValueError("A Conv2D layer can only succeed Conv2D and Input.")
             elif isinstance(layer, Conv1D):
                 if isinstance(prev_layer, Conv2D) or isinstance(prev_layer, Conv1D):
-                    layer.add_input_channels(prev_layer.channels, input_size=prev_layer.get_output_size())
-                else:
+                    layer.initialize_kernels(prev_layer.channels, input_size=prev_layer.get_output_size())
+                elif isinstance(prev_layer, Input):
                     layer.initialize_kernels(1, input_size=prev_layer.input_size)
+                elif isinstance(prev_layer, FullyConnected):
+                    layer.initialize_kernels(1, input_size=prev_layer.neurons)
+                else:
+                    raise ValueError("A Conv1D layer can only succeed Conv2D, Conv1D, Input and FullyConnected.")
             elif isinstance(layer, FullyConnected):
                 if isinstance(prev_layer, Conv2D):
                     input_size = prev_layer.channels * prev_layer.get_output_size()
@@ -124,11 +130,15 @@ class Network:
                     input_size = prev_layer.channels * prev_layer.get_output_size()
                     layer.initialize_weights(input_size=input_size)
                     layer.initialize_biases()
-                else:
+                elif isinstance(prev_layer, FullyConnected) or isinstance(prev_layer, Input):
                     layer.initialize_weights(input_size=prev_layer.neurons)
                     layer.initialize_biases()
-            else:
+                else:
+                    raise ValueError("A FullyConnected layer can only succeed Conv2D, Conv1D, Input and FullyConnected.")
+            elif isinstance(layer, Softmax):
                 layer.neurons = prev_layer.neurons
+            else:
+                raise ValueError("Network does not support this layer type.")
         else:
             if not isinstance(layer, Input):
                 raise ValueError("The first layer in the network must be a input layer")
@@ -173,8 +183,10 @@ class Network:
             if isinstance(layer.prev_layer, Conv2D) and isinstance(layer, Conv1D):
                 shape = x.shape[:-2] + (-1,)
                 x = x.reshape(shape)
+            elif isinstance(layer.prev_layer, FullyConnected) and isinstance(layer, Conv1D):
+                shape = x.shape[0:1] + (1,) + x.shape[1:]
+                x = x.reshape(shape)
             elif isinstance(layer.prev_layer, Conv2D) and isinstance(layer, FullyConnected):
-                # shape = (x.shape[0], np.prod(x.shape[1:]))
                 shape = (x.shape[0], -1)
                 layer.prev_layer.act = layer.prev_layer.act.reshape(shape)
                 x = x.reshape(shape)
@@ -205,6 +217,9 @@ class Network:
                 shape = layer.sum_in.shape
                 J = J.reshape(shape)
             elif isinstance(layer, Conv1D) and isinstance(downstream_layer, FullyConnected):
+                shape = layer.sum_in.shape
+                J = J.reshape(shape)
+            elif isinstance(layer, FullyConnected) and isinstance(downstream_layer, Conv1D):
                 shape = layer.sum_in.shape
                 J = J.reshape(shape)
             J = layer.backward_pass(J)

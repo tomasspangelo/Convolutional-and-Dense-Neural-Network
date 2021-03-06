@@ -240,14 +240,6 @@ class Conv1D(Layer):
 
     def backward_pass(self, J_L_Z):
 
-        # (sample_num, i, index)
-        # Derivative of output w.r.t. the sum in (diagonal of Jacobian)
-        # J_sum_diag = self.activation(self.sum_in, derivative=True)
-
-        # Derivative of output w.r.t the output of the previous layer.
-        # Corresponds to J_sum_diag dot W.T
-        # J_Z_Y = np.einsum("ij,jk->ijk", J_sum_diag, np.transpose(self.weights))
-
         J_L_K = np.zeros(self.kernels.shape)
         for key in self.weight_dict:
             for activation, sum_in in self.weight_dict[key]:
@@ -262,10 +254,11 @@ class Conv1D(Layer):
                 J_L_K[key[0], key[1], key[2]] += activation * delta
 
         batch_size = J_L_Z.shape[0]
-        J_L_Y = np.zeros(self.prev_layer.sum_in.shape)  # TODO: Take reduction of dimensions into account
+        J_L_Y = np.zeros(self.prev_layer.sum_in.shape)
         if isinstance(self.prev_layer, Conv2D):
             J_L_Y = J_L_Y.reshape((batch_size, self.channels_in, -1))
-
+        elif isinstance(self.prev_layer, FullyConnected):
+            J_L_Y = J_L_Y.reshape(J_L_Y.shape[0:1] + (1,) + J_L_Y.shape[1:])
         for key in self.input_dict:
             for kernel_weight, sum_in in self.input_dict[key]:
                 # key[0]: sample_num
@@ -441,14 +434,6 @@ class Conv2D(Layer):
         return output_height * output_width if flatten else (output_height, output_width)
 
     def backward_pass(self, J_L_Z):
-
-        # (sample_num, i, index)
-        # Derivative of output w.r.t. the sum in (diagonal of Jacobian)
-        # J_sum_diag = self.activation(self.sum_in, derivative=True)
-
-        # Derivative of output w.r.t the output of the previous layer.
-        # Corresponds to J_sum_diag dot W.T
-        # J_Z_Y = np.einsum("ij,jk->ijk", J_sum_diag, np.transpose(self.weights))
 
         J_L_K = np.zeros(self.kernels.shape)
         for key in self.weight_dict:
