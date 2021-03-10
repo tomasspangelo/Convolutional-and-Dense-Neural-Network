@@ -132,7 +132,10 @@ class DataSet:
                 flat_data.append(image.to_1d())
                 if one_hot:
                     one_hot_vector = [0 for _ in range(num_classes)]
-                    one_hot_vector[image.get_label()] = 1
+                    i = image.get_label()
+                    if self.dimensions == 1:
+                        i -= 1
+                    one_hot_vector[i] = 1
                     labels.append(one_hot_vector)
                 else:
                     labels.append([image.get_label()])
@@ -219,7 +222,7 @@ class DataSet:
                 for r in range(nrows):
                     image = np.random.choice(self.data_dict[c + 1])
                     class_images.append(image.flat)
-                a = fig.add_subplot(nrows, num_classes, c + 1)
+                a = fig.add_subplot(num_classes, 1, c + 1)
                 a.axis('off')
                 imgplot = plt.imshow(class_images)
                 a.set_title("{c} segments".format(c=c + 1))

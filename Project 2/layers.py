@@ -196,7 +196,9 @@ class Conv1D(Layer):
         self.sum_in = sum_in
         self.weight_dict = weight_dict
         self.input_dict = input_dict
-        return self.activation(sum_in)
+        self.batch_size = batch_size
+        self.act = self.activation(sum_in)
+        return self.act
 
     def _add_padding(self, x, pad=True):
         """
@@ -207,7 +209,9 @@ class Conv1D(Layer):
         input_width = len(x)
         if self.mode == "valid":
             output_width = int((input_width - self.kernel_size + 1) / self.stride)
-            return x, output_width if pad else 0, 0, output_width
+            if pad:
+                return x, output_width
+            return 0, 0, output_width
 
         if self.mode == "same":
             output_width = int(np.ceil(input_width / self.stride))
@@ -276,7 +280,7 @@ class Conv1D(Layer):
 
     def update_parameters(self, regularization=None):
         weight_gradient = self.weight_gradient
-        batch_w_gradient = 1 / weight_gradient.shape[0] * weight_gradient
+        batch_w_gradient = 1 / self.batch_size * weight_gradient
         if regularization:
             batch_w_gradient += regularization(self.kernels, derivative=True)
         self.kernels = self.kernels - self.learning_rate * batch_w_gradient
@@ -372,6 +376,7 @@ class Conv2D(Layer):
         self.sum_in = sum_in
         self.weight_dict = weight_dict
         self.input_dict = input_dict
+        self.batch_size = batch_size
         self.act = self.activation(sum_in)
         return self.act
 
@@ -476,7 +481,7 @@ class Conv2D(Layer):
 
     def update_parameters(self, regularization=None):
         weight_gradient = self.weight_gradient
-        batch_w_gradient = 1 / weight_gradient.shape[0] * weight_gradient
+        batch_w_gradient = 1 / self.batch_size * weight_gradient
         if regularization:
             batch_w_gradient += regularization(self.kernels, derivative=True)
         self.kernels = self.kernels - self.learning_rate * batch_w_gradient
