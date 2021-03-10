@@ -139,4 +139,4 @@ Temporary Items
 .idea/*
 
 # Pickle files (not secure)
-.Project 2/pickle*
+./Project 2/pickle*
