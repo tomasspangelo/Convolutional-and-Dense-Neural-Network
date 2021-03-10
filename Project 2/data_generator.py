@@ -238,7 +238,7 @@ class Image1D:
         """
         Initializes variables.
         :param flat: 1D Numpy representation of the image.
-        :param figure: String indicating figure type.
+        :param figure: Integer indicating figure type.
         """
         self.figure = figure
         self.label = figure

@@ -8,6 +8,11 @@ from network import Network
 
 
 def add_channel(x):
+    """
+    Adds a single channel to a numpy array.
+    :param x: Numpy array
+    :return: Numpy array with one channel.
+    """
     shape = x.shape[0:1] + (1,) + x.shape[1:]
     return x.reshape(shape)
 
@@ -91,6 +96,11 @@ def main_test():
 
 
 def load_network(filename):
+    """
+    Loads a model from a pickle file.
+    :param filename: name of the file w/ out the file extension.
+    :return: Network object.
+    """
     model, loss = Network.load(filename, loss=True)
     for layer in model.layers:
         if isinstance(layer, Conv2D) or isinstance(layer, Conv1D):
@@ -111,6 +121,11 @@ def load_network(filename):
 
 
 def init_dataset(data_config):
+    """
+    Initializes the dataset.
+    :param data_config: Config parser.
+    :return: 4 Dataset objects.
+    """
     print("Generating the dataset...")
     n = int(data_config['n'])
     size = int(data_config['size'])
@@ -149,6 +164,11 @@ def init_dataset(data_config):
 
 
 def init_network(network_config):
+    """
+    Initializes the network (model)
+    :param network_config: Config parser.
+    :return: Network object and boolean indicating if the first hidden layer is convolutional.
+    """
     model = Network()
 
     input_size = eval(network_config['input_size'])
@@ -227,6 +247,7 @@ def init_network(network_config):
 
 
 def main():
+    """ Main method of the program. """
     if len(sys.argv) < 3:
         print("Please indicate if file should be loaded [load/fit] + filename w/out file extension, and try again.")
         return

@@ -153,8 +153,20 @@ class Input(Layer):
 
 
 class Conv1D(Layer):
+    """
+    Class for 1-dimensional convolutional layer.
+    """
+
     def __init__(self, activation, kernel_size, num_kernels, stride, mode, weight_range=(-0.5, 0.5)):
-        # TODO: Fix input size and neurons for Conv1D (and Conv2D)
+        """
+        Initializes all variables and calls constructor of superclass.
+        :param activation: String indicating activation function.
+        :param kernel_size: Integer indicating kernel size.
+        :param num_kernels: Integer indicating the number of kernels.
+        :param stride: Integer indicating stride.
+        :param mode: String indicating mode. Options are: "same", "valid" or "full".
+        :param weight_range: Tuple of floats indicating weight range for initialization.
+        """
         super().__init__(input_size=0, neurons=0, activation=activation)
         if not self.activation:
             raise ValueError("'{activation}' is not a valid activation function for a fully connected layer.".format(
@@ -169,6 +181,11 @@ class Conv1D(Layer):
         self.weight_range = weight_range
 
     def forward_pass(self, x):
+        """
+        Forward pass for Conv1D layer (performs the convolution)
+        :param x: Input
+        :return: Activation for layer.
+         """
 
         batch_size = x.shape[0]
         left_padding, right_padding, output_width = self._add_padding(x[-1, -1], pad=False)
@@ -202,9 +219,10 @@ class Conv1D(Layer):
 
     def _add_padding(self, x, pad=True):
         """
-        Adds padding to a single data point.
-        :param x: sample x.
-        :return: x with padding
+        Adds padding to a single data point, or calculates necessary padding.
+        :param x: Sample x.
+        :param pad: True if padding should be performed, False if desired output is necessary padding.
+        :return: x with padding or "padding dimensions".
         """
         input_width = len(x)
         if self.mode == "valid":
@@ -225,6 +243,9 @@ class Conv1D(Layer):
         return np.pad(x, (left_padding, right_padding), 'constant', constant_values=0), output_width
 
     def get_output_size(self):
+        """
+        :return: Width of the output of the layer.
+        """
         input_width = self.input_size
         if self.mode == "valid":
             output_width = int((input_width - self.kernel_size + 1) / self.stride)
@@ -237,12 +258,22 @@ class Conv1D(Layer):
         return output_width
 
     def initialize_kernels(self, channels_in, input_size):
+        """
+        Initializes the kernels.
+        :param channels_in: Integer indicating # of input channels.
+        :param input_size: Size of the input.
+        """
         self.input_size = input_size
         self.channels_in = channels_in
         self.kernels = np.random.uniform(self.weight_range[0], self.weight_range[1],
                                          (self.num_kernels, channels_in, self.kernel_size))
 
     def backward_pass(self, J_L_Z):
+        """
+        Performs backward pass for Conv1D layer.
+        :param J_L_Z: Jacobian passed down from downstream neighbor.
+        :return: Jacobian passed to upstream neighbor.
+        """
 
         J_L_K = np.zeros(self.kernels.shape)
         for key in self.weight_dict:
@@ -279,6 +310,10 @@ class Conv1D(Layer):
         return J_L_Y if not isinstance(self.prev_layer, Conv2D) else J_L_Y.reshape(self.prev_layer.sum_in.shape)
 
     def update_parameters(self, regularization=None):
+        """
+        Updates the kernel weights.
+        :param regularization: Function object passed from network.
+        """
         weight_gradient = self.weight_gradient
         batch_w_gradient = 1 / self.batch_size * weight_gradient
         if regularization:
@@ -286,6 +321,7 @@ class Conv1D(Layer):
         self.kernels = self.kernels - self.learning_rate * batch_w_gradient
 
     def visualize_kernels(self):
+        """Visualizes the kernel weights in a Hinton diagram."""
         fig = plt.figure()
 
         nrows = self.kernels.shape[0]
@@ -327,7 +363,20 @@ class Conv1D(Layer):
 
 
 class Conv2D(Layer):
+    """
+    Class for 2-dimensional convolutional layer.
+    """
+
     def __init__(self, activation, kernel_size, num_kernels, stride, mode, weight_range=(-0.5, 0.5)):
+        """
+        Initializes all variables and calls constructor of superclass.
+        :param activation: String indicating activation function.
+        :param kernel_size: Tuple of integers indicating kernel size.
+        :param num_kernels: Integer indicating the number of kernels.
+        :param stride: Tuple of integers indicating stride.
+        :param mode: Tuple of strings indicating mode. Options are: "same", "valid" or "full".
+        :param weight_range: Tuple of floats indicating weight range for initialization.
+        """
         super().__init__(input_size=0, neurons=0, activation=activation)
         self.kernels = []
         self.channels = num_kernels
@@ -339,6 +388,11 @@ class Conv2D(Layer):
         self.weight_range = weight_range
 
     def forward_pass(self, x):
+        """
+        Forward pass for Conv2D layer (performs convolution).
+        :param x: Input.
+        :return: Activation of layer.
+        """
         batch_size = x.shape[0]
         top_padding, bottom_padding, left_padding, right_padding, output_size = self._add_padding(x[-1, -1], pad=False)
         padded_height = x[-1, -1].shape[0] + top_padding + bottom_padding
@@ -382,9 +436,10 @@ class Conv2D(Layer):
 
     def _add_padding(self, x, pad=True):
         """
-        Adds padding to a single data point.
-        :param x: sample x.
-        :return: x with padding
+        Adds padding to a single data point, or calculates necessary padding.
+        :param x: Sample x.
+        :param pad: True if padding should be performed, False if desired output is necessary padding.
+        :return: x with padding or "padding dimensions".
         """
 
         input_height = x.shape[0]
@@ -420,6 +475,11 @@ class Conv2D(Layer):
                       constant_values=0), (output_height, output_width)
 
     def get_output_size(self, flatten=True):
+        """
+        Calculates size of output for the layer.
+        :param flatten: True if output should be flattened, False otherwise.
+        :return: Output size.
+        """
         input_height = self.input_size[0]
         if self.mode[0] == "valid":
             output_height = int((input_height - self.kernel_size[0] + 1) / self.stride[0])
@@ -439,6 +499,11 @@ class Conv2D(Layer):
         return output_height * output_width if flatten else (output_height, output_width)
 
     def backward_pass(self, J_L_Z):
+        """
+        Performs backward pass for Conv2D layer.
+        :param J_L_Z: Jacobian passed down from downstream neighbor.
+        :return: Jacobian passed to upstream neighbor.
+        """
 
         J_L_K = np.zeros(self.kernels.shape)
         for key in self.weight_dict:
@@ -474,12 +539,21 @@ class Conv2D(Layer):
         return J_L_Y
 
     def initialize_kernels(self, channels_in, input_size):
+        """
+        Initializes kernel weights.
+        :param channels_in: Integer indicating input channels.
+        :param input_size: Size of the input.
+        """
         self.input_size = input_size
         self.channels_in = channels_in
         self.kernels = np.random.uniform(self.weight_range[0], self.weight_range[1],
                                          (self.num_kernels, channels_in,) + self.kernel_size)
 
     def update_parameters(self, regularization=None):
+        """
+        Updates the kernel weights.
+        :param regularization: Method object passed from network.
+        """
         weight_gradient = self.weight_gradient
         batch_w_gradient = 1 / self.batch_size * weight_gradient
         if regularization:
@@ -487,6 +561,7 @@ class Conv2D(Layer):
         self.kernels = self.kernels - self.learning_rate * batch_w_gradient
 
     def visualize_kernels(self):
+        """ Method for visualizing kernel weights in Hinton diagram. """
         fig = plt.figure()
 
         nrows = self.kernels.shape[0]
@@ -607,6 +682,10 @@ class FullyConnected(Layer):
         return J_L_Y
 
     def update_parameters(self, regularization=None):
+        """
+        Updates the weights of the layer.
+        :param regularization: Method object passed from network.
+        """
         weight_gradient = self.weight_gradient
         batch_w_gradient = 1 / weight_gradient.shape[0] * np.sum(weight_gradient,
                                                                  axis=0)
