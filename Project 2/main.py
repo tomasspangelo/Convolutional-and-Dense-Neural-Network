@@ -247,10 +247,9 @@ def main():
     num = 10 if dimensions == 2 else 20
     dataset.visualize(num)
 
-
     network_config = config['network']
     model, conv_in_first = init_network(network_config)
-    plt.show()
+
     epochs = int(config['fit']['epochs'])
     metrics = eval(config['fit']['metrics'])
     batch_size = int(config['fit']['batch_size'])
@@ -296,6 +295,10 @@ def main():
     if save:
         filename = config['fit']['filename']
         model.save(filename, [train_loss, val_loss, test_loss])
+
+    for layer in model.layers:
+        if isinstance(layer, Conv2D) or isinstance(layer, Conv1D):
+            layer.visualize_kernels()
 
     input("Press enter to exit ")
 
